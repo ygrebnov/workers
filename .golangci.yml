@@ -1,0 +1,79 @@
+run:
+  skip-dirs:
+    - vendor
+
+output:
+  format: colored-line-number
+
+linters-settings:
+  govet:
+    check-shadowing: true
+  revive:
+    min-confidence: 0.8
+  gocyclo:
+    min-complexity: 30
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 2
+    min-occurences: 2
+  lll:
+    line-length: 160
+  gocritic:
+    disabled-tags:
+      - optionated
+      - experimental
+  funlen:
+    lines: 100
+    statements: 50
+  nakedret:
+    max-func-lines: 40
+
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - exportloopref
+    - funlen
+    - goconst
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - revive
+    - staticcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unused
+    - whitespace
+
+issues:
+  exclude-rules:
+    - path: _test.go
+      linters:
+        - dogsled
+        - dupl
+        - gosec
+        - funlen
+        - gocyclo
+        - gocritic
+        - govet
+        - lll
+        - ineffassign
+        - noctx
+        - unused
+    - text: declaration of "err" shadows declaration
+      linters:
+        - govet
