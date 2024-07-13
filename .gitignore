@@ -1,0 +1,5 @@
+/.tests/
+/vendor/
+.DS_Store
+/.idea/
+/e2e/
