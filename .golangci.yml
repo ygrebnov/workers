@@ -1,13 +1,8 @@
-run:
-  skip-dirs:
-    - vendor
-
 output:
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
 
 linters-settings:
-  govet:
-    check-shadowing: true
   revive:
     min-confidence: 0.8
   gocyclo:
@@ -21,7 +16,7 @@ linters-settings:
     line-length: 160
   gocritic:
     disabled-tags:
-      - optionated
+      - opinionated
       - experimental
   funlen:
     lines: 100
@@ -33,11 +28,9 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - depguard
     - dogsled
     - dupl
     - errcheck
-    - exportloopref
     - funlen
     - goconst
     - gocritic
@@ -60,6 +53,8 @@ linters:
     - whitespace
 
 issues:
+  exclude-dirs:
+    - vendor
   exclude-rules:
     - path: _test.go
       linters:
@@ -77,3 +72,6 @@ issues:
     - text: declaration of "err" shadows declaration
       linters:
         - govet
+    - text: error strings should not be capitalized
+      linters:
+        - stylecheck

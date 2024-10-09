@@ -1,5 +1,5 @@
-/.tests/
-/vendor/
+vendor
 .DS_Store
-/.idea/
-/e2e/
+.idea
+.coverage
+.profiling
