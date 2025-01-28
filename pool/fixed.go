@@ -3,6 +3,7 @@ package pool
 type fixed struct {
 	available chan interface{}
 	all       chan interface{}
+	buf       chan interface{}
 	newFn     func() interface{}
 }
 
@@ -10,6 +11,7 @@ func NewFixed(capacity uint, newFn func() interface{}) Pool {
 	return &fixed{
 		available: make(chan interface{}, capacity),
 		all:       make(chan interface{}, capacity),
+		buf:       make(chan interface{}, 1024),
 		newFn:     newFn,
 	}
 }
@@ -19,19 +21,32 @@ func (p *fixed) Get() interface{} {
 	case el := <-p.available:
 		return el
 
+	case el := <-p.buf:
+		return el
+
 	default:
+		var el interface{}
+
 		if len(p.all) < cap(p.all) {
-			el := p.newFn()
-			p.all <- el
-			return el
+			el = p.newFn()
+		} else {
+			el = <-p.all
 		}
 
-		el := <-p.all
-		p.all <- el
+		select {
+		case p.all <- el:
+		case p.buf <- el:
+		default:
+		}
 		return el
 	}
 }
 
 func (p *fixed) Put(el interface{}) {
-	p.available <- el
+	select {
+	case p.available <- el:
+	case p.all <- el:
+	case p.buf <- el:
+	default:
+	}
 }
