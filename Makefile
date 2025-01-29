@@ -30,4 +30,4 @@ test-pprof: dir-profiling
 	@go tool pprof -http :8080 $(PROFILING_PATH)mem.prof
 
 .PHONY: all
-all: clean lint test bench test-pprof
+all: clean lint test
