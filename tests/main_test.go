@@ -124,6 +124,5 @@ var (
 	errorTaskResultError = newErrorTaskResultError(errBasic)
 	panicTaskResultError = newPanicTaskResultError()
 	panicTaskResult      = newPanicTaskResult()
-	panicTaskError       = newPanicTaskError(100 * time.Millisecond)
 	panicLongTaskError   = newPanicTaskError(700 * time.Millisecond)
 )
