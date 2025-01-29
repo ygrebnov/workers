@@ -1,56 +1,92 @@
+run:
+  timeout: 5m
+
 output:
   formats:
     - format: colored-line-number
-
-linters-settings:
-  revive:
-    min-confidence: 0.8
-  gocyclo:
-    min-complexity: 30
-  dupl:
-    threshold: 100
-  goconst:
-    min-len: 2
-    min-occurences: 2
-  lll:
-    line-length: 160
-  gocritic:
-    disabled-tags:
-      - opinionated
-      - experimental
-  funlen:
-    lines: 100
-    statements: 50
-  nakedret:
-    max-func-lines: 40
 
 linters:
   disable-all: true
   enable:
     - bodyclose
+    - copyloopvar
+    - depguard
     - dogsled
     - dupl
+    - durationcheck
     - errcheck
+    - exhaustive
     - funlen
+    - gci
     - goconst
     - gocritic
     - gocyclo
+    - godot
     - gofmt
     - goimports
+    - gomoddirectives
     - gosec
     - gosimple
     - govet
+    - importas
     - ineffassign
     - lll
     - misspell
     - nakedret
+    - nilerr
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
     - revive
     - staticcheck
     - stylecheck
+    - tparallel
     - typecheck
     - unconvert
+    - unparam
     - unused
+    - wastedassign
     - whitespace
+    - wrapcheck
+
+linters-settings:
+  depguard:
+    rules:
+      main:
+        deny:
+          - pkg: "github.com/pkg/errors"
+            desc: Use `errors` package from the standard library
+  dupl:
+    threshold: 100
+  funlen:
+    ignore-comments: true
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/ygrebnov/workers)
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+      - experimental
+      - opinionated
+  gocyclo:
+    min-complexity: 10
+  godot:
+    capital: true
+  goimports:
+    local-prefixes: github.com/ygrebnov/workers
+  gosec:
+    exclude-generated: true
+  govet:
+    enable:
+      - shadow
 
 issues:
   exclude-dirs:
@@ -62,16 +98,5 @@ issues:
         - dupl
         - gosec
         - funlen
-        - gocyclo
-        - gocritic
         - govet
         - lll
-        - ineffassign
-        - noctx
-        - unused
-    - text: declaration of "err" shadows declaration
-      linters:
-        - govet
-    - text: error strings should not be capitalized
-      linters:
-        - stylecheck
