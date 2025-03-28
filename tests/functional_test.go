@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -34,7 +35,7 @@ func TestFunctional(t *testing.T) {
 		},
 		{
 			name:            "fixed, taskResultError, many, no errors",
-			maxWorkers:      4,
+			maxWorkers:      uint(runtime.NumCPU()),
 			tasks:           tasksN2048Size2,
 			expectedResults: expectedN2048Size2,
 			expectedErrors:  nil,

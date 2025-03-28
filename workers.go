@@ -7,6 +7,9 @@ import (
 )
 
 type Config struct {
+	// MaxWorkers defines workers pool maximum size.
+	// Zero (default) means that the size will be set dynamically.
+	// Zero value is suitable for the majority of cases.
 	MaxWorkers uint
 
 	// StartImmediately defines whether workers start executing tasks immediately or not.
@@ -44,10 +47,14 @@ type workersStoppable[R interface{}] struct {
 }
 
 func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
+	if config == nil {
+		config = &Config{}
+	}
+
 	r := make(chan R, 1024)
 
 	eCapacity := 1024
-	if config != nil && config.StopOnError {
+	if config.StopOnError {
 		eCapacity = 100
 	}
 	e := make(chan error, eCapacity)
@@ -57,18 +64,18 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 	}
 
 	var p pool.Pool
-	if config != nil && config.MaxWorkers > 0 {
+	if config.MaxWorkers > 0 {
 		p = pool.NewFixed(config.MaxWorkers, newWorkerFn)
 	} else {
 		p = pool.NewDynamic(newWorkerFn)
 	}
 
 	var w Workers[R]
-	if config != nil && config.StopOnError {
+	if config.StopOnError {
 		w = &workersStoppable[R]{
 			workers: &workers[R]{
 				config:  config,
-				tasks:   make(chan task[R]),
+				tasks:   make(chan task[R], config.TasksBufferSize),
 				results: r,
 				errors:  make(chan error, 1024),
 				pool:    p,
@@ -78,14 +85,14 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 	} else {
 		w = &workers[R]{
 			config:  config,
-			tasks:   make(chan task[R]),
+			tasks:   make(chan task[R], config.TasksBufferSize),
 			results: r,
 			errors:  e,
 			pool:    p,
 		}
 	}
 
-	if config != nil && config.StartImmediately {
+	if config.StartImmediately {
 		w.Start(ctx)
 	}
 
