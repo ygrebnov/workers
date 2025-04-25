@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"sync"
 
 	"github.com/ygrebnov/workers/pool"
 )
@@ -31,7 +32,7 @@ type Workers[R interface{}] interface {
 type workers[R interface{}] struct {
 	config *Config
 
-	isStarted bool
+	once sync.Once
 
 	pool pool.Pool
 
@@ -100,50 +101,44 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 }
 
 func (w *workers[R]) Start(ctx context.Context) {
-	if w.isStarted {
-		return
-	}
-	w.isStarted = true
+	w.once.Do(func() {
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-
-			case t := <-w.tasks:
-				go w.dispatch(ctx, t)
+				case t := <-w.tasks:
+					go w.dispatch(ctx, t)
+				}
 			}
-		}
-	}()
+		}()
+	})
 }
 
 func (w *workersStoppable[R]) Start(ctx context.Context) {
-	if w.isStarted {
-		return
-	}
-	w.isStarted = true
+	w.once.Do(func() {
+		ctx, cancel := context.WithCancel(ctx)
 
-	ctx, cancel := context.WithCancel(ctx)
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
+				case t := <-w.tasks:
+					go w.dispatch(ctx, t)
 
-			case t := <-w.tasks:
-				go w.dispatch(ctx, t)
+				case e := <-w.errorsBuf:
+					w.errors <- e
 
-			case e := <-w.errorsBuf:
-				w.errors <- e
-
-				if w.config.StopOnError {
-					cancel()
+					if w.config.StopOnError {
+						cancel()
+					}
 				}
 			}
-		}
-	}()
+		}()
+	})
 }
 
 func (w *workers[R]) AddTask(t interface{}) error {

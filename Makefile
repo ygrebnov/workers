@@ -1,5 +1,3 @@
-.DEFAULT_GOAL := all
-
 ROOT_PATH := $(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 COVERAGE_PATH := $(ROOT_PATH).coverage/
 PROFILING_PATH := $(ROOT_PATH).profiling/
@@ -29,5 +27,4 @@ test-pprof: dir-profiling
 	@go test ./tests/... -memprofile $(PROFILING_PATH)mem.prof
 	@go tool pprof -http :8080 $(PROFILING_PATH)mem.prof
 
-.PHONY: all
-all: clean lint test
+.PHONY: clean dir-coverage dir-profiling lint test bench test-pprof
