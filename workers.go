@@ -118,7 +118,8 @@ func (w *workers[R]) Start(ctx context.Context) {
 
 func (w *workersStoppable[R]) Start(ctx context.Context) {
 	w.once.Do(func() {
-		ctx, cancel := context.WithCancel(ctx)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
 
 		go func() {
 			for {

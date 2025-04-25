@@ -10,6 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type contextKey string
+
+const key contextKey = "key"
+
 func TestWorkers_Start_ThreadSafety(t *testing.T) {
 	config := &Config{
 		MaxWorkers:      5,
@@ -19,7 +23,7 @@ func TestWorkers_Start_ThreadSafety(t *testing.T) {
 	n := int32(10)
 	ctxs := make([]context.Context, n)
 	for i := range n {
-		ctxs[i] = context.WithValue(context.Background(), "key", fmt.Sprintf("value%d", i))
+		ctxs[i] = context.WithValue(context.Background(), key, fmt.Sprintf("value%d", i))
 	}
 
 	// initialize workers with context which is not in ctxs.
@@ -39,7 +43,7 @@ func TestWorkers_Start_ThreadSafety(t *testing.T) {
 			atomic.AddInt32(&startCount, 1)
 
 			err := w.AddTask(func(ctx context.Context) (string, error) {
-				val, ok := ctx.Value("key").(string)
+				val, ok := ctx.Value(key).(string)
 				require.True(t, ok, "Expected value to be of type string")
 
 				return val, nil
