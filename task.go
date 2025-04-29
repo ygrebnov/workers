@@ -42,6 +42,7 @@ func (t *taskResultError[R]) execute(ctx context.Context) (R, error) {
 		defer func() {
 			if ePanic := recover(); ePanic != nil {
 				err = fmt.Errorf("task execution panicked: %v", ePanic)
+				done <- struct{}{}
 			}
 		}()
 
@@ -73,6 +74,7 @@ func (t *taskResult[R]) execute(ctx context.Context) (R, error) {
 		defer func() {
 			if ePanic := recover(); ePanic != nil {
 				err = fmt.Errorf("task execution panicked: %v", ePanic)
+				done <- struct{}{}
 			}
 		}()
 
@@ -101,6 +103,7 @@ func (t *taskError[R]) execute(ctx context.Context) (R, error) {
 		defer func() {
 			if ePanic := recover(); ePanic != nil {
 				err = fmt.Errorf("task execution panicked: %v", ePanic)
+				done <- struct{}{}
 			}
 		}()
 
