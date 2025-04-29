@@ -24,14 +24,18 @@ func newTaskStringError(n int, e, p bool) func(ctx context.Context) (string, err
 	}
 }
 
-func newTaskString(n int, returnError bool) func(ctx context.Context) string {
+func newTaskString(n int, e, p bool) func(ctx context.Context) string {
 	return func(ctx context.Context) string {
 		// Simulate a long-running task
 		time.Sleep(time.Millisecond * 600 * time.Duration(n))
 
-		// Function returns for n == 3
-		if returnError && n == 3 {
+		if e && n == 3 {
+			// Simulate an error.
 			return ""
+		}
+		if p && n == 3 {
+			// Simulate a panic.
+			panic(fmt.Sprintf("panic on executing task for: %d", n))
 		}
 
 		return fmt.Sprintf("Executed for: %d, result: %d.", n, n*n)

@@ -123,7 +123,7 @@ func Test_CancelContext_TaskString(t *testing.T) {
 	}()
 
 	for i := 1; i <= 5; i++ {
-		err := w.AddTask(newTaskString(i, false))
+		err := w.AddTask(newTaskString(i, false, false))
 		require.NoError(t, err)
 	}
 
@@ -149,7 +149,7 @@ func Test_CancelContext_TaskString(t *testing.T) {
 	}()
 
 	for i := 1; i <= 5; i++ {
-		err := w.AddTask(newTaskString(i, false))
+		err := w.AddTask(newTaskString(i, false, false))
 		require.ErrorIs(t, err, workers.ErrWorkersStopped)
 	}
 
