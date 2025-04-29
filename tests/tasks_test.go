@@ -6,10 +6,12 @@ import (
 	"time"
 )
 
-func newTaskStringError(n int, e, p bool) func(ctx context.Context) (string, error) {
+func newTaskStringError(n int, long, e, p bool) func(ctx context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
-		// Simulate a long-running task
-		time.Sleep(time.Millisecond * 600 * time.Duration(n))
+		if long {
+			// Simulate a long-running task
+			time.Sleep(time.Millisecond * 60 * time.Duration(n))
+		}
 
 		if e && n == 3 {
 			// Simulate an error.
@@ -24,10 +26,12 @@ func newTaskStringError(n int, e, p bool) func(ctx context.Context) (string, err
 	}
 }
 
-func newTaskString(n int, e, p bool) func(ctx context.Context) string {
+func newTaskString(n int, long, e, p bool) func(ctx context.Context) string {
 	return func(ctx context.Context) string {
-		// Simulate a long-running task
-		time.Sleep(time.Millisecond * 600 * time.Duration(n))
+		if long {
+			// Simulate a long-running task
+			time.Sleep(time.Millisecond * 60 * time.Duration(n))
+		}
 
 		if e && n == 3 {
 			// Simulate an error.
@@ -42,14 +46,20 @@ func newTaskString(n int, e, p bool) func(ctx context.Context) string {
 	}
 }
 
-func newTaskErr(n int, returnError bool) func(ctx context.Context) error {
+func newTaskErr(n int, long, e, p bool) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
-		// Simulate a long-running task
-		time.Sleep(time.Millisecond * 600 * time.Duration(n))
+		if long {
+			// Simulate a long-running task
+			time.Sleep(time.Millisecond * 60 * time.Duration(n))
+		}
 
-		// Function returns an error for n == 3
-		if returnError && n == 3 {
+		if e && n == 3 {
+			// Simulate an error.
 			return fmt.Errorf("error executing task for: %d", n)
+		}
+		if p && n == 3 {
+			// Simulate a panic.
+			panic(fmt.Sprintf("panic on executing task for: %d", n))
 		}
 
 		return nil

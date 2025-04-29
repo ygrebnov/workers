@@ -21,6 +21,7 @@ type Config struct {
 	// StopOnError stops tasks execution if an error occurs.
 	StopOnError bool
 
+	// TasksBufferSize defines the size of the tasks channel buffer.
 	TasksBufferSize uint
 }
 
@@ -97,12 +98,17 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 		p = pool.NewDynamic(newWorkerFn)
 	}
 
+	tasks := make(chan task[R], config.TasksBufferSize)
+	if config.TasksBufferSize == 0 {
+		tasks = nil // to return error in AddTask.
+	}
+
 	var w Workers[R]
 	if config.StopOnError {
 		w = &workersStoppable[R]{
 			workers: &workers[R]{
 				config:  config,
-				tasks:   make(chan task[R], config.TasksBufferSize),
+				tasks:   tasks,
 				results: r,
 				errors:  make(chan error, 1024),
 				pool:    p,
@@ -112,7 +118,7 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 	} else {
 		w = &workers[R]{
 			config:  config,
-			tasks:   make(chan task[R], config.TasksBufferSize),
+			tasks:   tasks,
 			results: r,
 			errors:  e,
 			pool:    p,
@@ -129,6 +135,9 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 // Start starts the Workers and begins executing tasks.
 func (w *workers[R]) Start(ctx context.Context) {
 	w.once.Do(func() {
+		if w.tasks == nil {
+			w.tasks = make(chan task[R])
+		}
 		go func() {
 			for {
 				select {
@@ -151,10 +160,15 @@ func (w *workersStoppable[R]) Start(ctx context.Context) {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithCancel(ctx)
 
+		if w.tasks == nil {
+			w.tasks = make(chan task[R])
+		}
+
 		go func() {
 			for {
 				select {
 				case <-ctx.Done():
+					w.tasks = nil
 					return
 
 				case t := <-w.tasks:
@@ -172,7 +186,9 @@ func (w *workersStoppable[R]) Start(ctx context.Context) {
 	})
 }
 
-var ErrWorkersStopped = errors.New("workers have been stopped")
+var (
+	ErrInvalidState = errors.New("cannot add a task for non-started workers with unbuffered tasks channel")
+)
 
 // AddTask adds a task to the Workers queue.
 func (w *workers[R]) AddTask(t interface{}) error {
@@ -181,8 +197,12 @@ func (w *workers[R]) AddTask(t interface{}) error {
 		return err
 	}
 
-	if w.tasks == nil {
-		return ErrWorkersStopped
+	switch {
+	case w.tasks == nil:
+		return ErrInvalidState
+
+	case cap(w.tasks) > 0 && len(w.tasks) == cap(w.tasks):
+		panic("tasks channel is full")
 	}
 
 	w.tasks <- tt
