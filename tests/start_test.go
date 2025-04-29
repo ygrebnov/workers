@@ -1,4 +1,4 @@
-package workers
+package tests
 
 import (
 	"context"
@@ -8,14 +8,16 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/ygrebnov/workers"
 )
 
 type contextKey string
 
 const key contextKey = "key"
 
-func TestWorkers_Start_ThreadSafety(t *testing.T) {
-	config := &Config{
+func Test_Start_ThreadSafety(t *testing.T) {
+	config := &workers.Config{
 		MaxWorkers:      5,
 		TasksBufferSize: 10,
 	}
@@ -27,7 +29,7 @@ func TestWorkers_Start_ThreadSafety(t *testing.T) {
 	}
 
 	// initialize workers with context which is not in ctxs.
-	w := New[string](context.Background(), config).(*workers[string])
+	w := workers.New[string](context.Background(), config)
 
 	var wg sync.WaitGroup
 	startCount := int32(0)

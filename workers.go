@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/ygrebnov/workers/pool"
@@ -132,6 +133,7 @@ func (w *workers[R]) Start(ctx context.Context) {
 			for {
 				select {
 				case <-ctx.Done():
+					w.tasks = nil
 					return
 
 				case t := <-w.tasks:
@@ -170,11 +172,17 @@ func (w *workersStoppable[R]) Start(ctx context.Context) {
 	})
 }
 
+var ErrWorkersStopped = errors.New("workers have been stopped")
+
 // AddTask adds a task to the Workers queue.
 func (w *workers[R]) AddTask(t interface{}) error {
 	tt, err := newTask[R](t)
 	if err != nil {
 		return err
+	}
+
+	if w.tasks == nil {
+		return ErrWorkersStopped
 	}
 
 	w.tasks <- tt

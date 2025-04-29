@@ -3,6 +3,7 @@ package workers
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 type task[R interface{}] interface {
@@ -30,7 +31,30 @@ type taskResultError[R interface{}] struct {
 }
 
 func (t *taskResultError[R]) execute(ctx context.Context) (R, error) {
-	return t.fn(ctx)
+	var (
+		result R
+		err    error
+	)
+
+	done := make(chan struct{}, 1)
+
+	go func() {
+		defer func() {
+			if ePanic := recover(); ePanic != nil {
+				err = fmt.Errorf("task execution panicked: %v", ePanic)
+			}
+		}()
+
+		result, err = t.fn(ctx)
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return *(new(R)), ctx.Err()
+	case <-done:
+		return result, err
+	}
 }
 
 type taskResult[R interface{}] struct {
@@ -38,7 +62,30 @@ type taskResult[R interface{}] struct {
 }
 
 func (t *taskResult[R]) execute(ctx context.Context) (R, error) {
-	return t.fn(ctx), nil
+	var (
+		result R
+		err    error
+	)
+
+	done := make(chan struct{}, 1)
+
+	go func() {
+		defer func() {
+			if ePanic := recover(); ePanic != nil {
+				err = fmt.Errorf("task execution panicked: %v", ePanic)
+			}
+		}()
+
+		result = t.fn(ctx)
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return *(new(R)), ctx.Err()
+	case <-done:
+		return result, err
+	}
 }
 
 type taskError[R interface{}] struct {
@@ -46,5 +93,25 @@ type taskError[R interface{}] struct {
 }
 
 func (t *taskError[R]) execute(ctx context.Context) (R, error) {
-	return *(new(R)), t.fn(ctx)
+	var err error
+
+	done := make(chan struct{}, 1)
+
+	go func() {
+		defer func() {
+			if ePanic := recover(); ePanic != nil {
+				err = fmt.Errorf("task execution panicked: %v", ePanic)
+			}
+		}()
+
+		err = t.fn(ctx)
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return *(new(R)), ctx.Err()
+	case <-done:
+		return *(new(R)), err
+	}
 }
