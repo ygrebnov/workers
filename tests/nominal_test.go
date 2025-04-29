@@ -1,14 +1,13 @@
 package tests
 
 import (
-	"context"
 	"runtime"
 	"testing"
 
 	"github.com/ygrebnov/workers"
 )
 
-func TestCancelContext(t *testing.T) {
+func TestNominal(t *testing.T) {
 	tests := []testCase{
 		// immediate start tests.
 		{
@@ -18,13 +17,12 @@ func TestCancelContext(t *testing.T) {
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskStringError(i, true, false, false)
+				return newTaskStringError(i, false, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			twoSetsOfTasks:  true,
-			contextTimeout:  true,
+			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
+			expectedErrors:  []error{},
 		},
+
 		{
 			name: "taskStringError_fixed_startImmediately",
 			config: &workers.Config{
@@ -33,12 +31,10 @@ func TestCancelContext(t *testing.T) {
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskStringError(i, true, false, false)
+				return newTaskStringError(i, false, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			twoSetsOfTasks:  true,
-			contextTimeout:  true,
+			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
+			expectedErrors:  []error{},
 		},
 
 		{
@@ -48,13 +44,12 @@ func TestCancelContext(t *testing.T) {
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskString(i, true, false, false)
+				return newTaskString(i, false, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			twoSetsOfTasks:  true,
-			contextTimeout:  true,
+			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
+			expectedErrors:  []error{},
 		},
+
 		{
 			name: "taskString_fixed_startImmediately",
 			config: &workers.Config{
@@ -63,12 +58,10 @@ func TestCancelContext(t *testing.T) {
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskString(i, true, false, false)
+				return newTaskString(i, false, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			twoSetsOfTasks:  true,
-			contextTimeout:  true,
+			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
+			expectedErrors:  []error{},
 		},
 
 		{
@@ -78,13 +71,12 @@ func TestCancelContext(t *testing.T) {
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskErr(i, true, false, false)
+				return newTaskErr(i, false, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			twoSetsOfTasks:  true,
-			contextTimeout:  true,
+			expectedErrors:  []error{},
 		},
+
 		{
 			name: "taskError_fixed_startImmediately",
 			config: &workers.Config{
@@ -93,12 +85,10 @@ func TestCancelContext(t *testing.T) {
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskErr(i, true, false, false)
+				return newTaskErr(i, false, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			twoSetsOfTasks:  true,
-			contextTimeout:  true,
+			expectedErrors:  []error{},
 		},
 
 		// delayed start tests.
@@ -109,14 +99,13 @@ func TestCancelContext(t *testing.T) {
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskStringError(i, true, false, false)
+				return newTaskStringError(i, false, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			contextTimeout:  true,
+			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
+			expectedErrors:  []error{},
 			delayedStart:    true,
-			twoSetsOfTasks:  true,
 		},
+
 		{
 			name: "taskStringError_fixed_delayedStart",
 			config: &workers.Config{
@@ -125,30 +114,28 @@ func TestCancelContext(t *testing.T) {
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskStringError(i, true, false, false)
+				return newTaskStringError(i, false, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			contextTimeout:  true,
+			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
+			expectedErrors:  []error{},
 			delayedStart:    true,
-			twoSetsOfTasks:  true,
 		},
 
 		{
 			name: "taskString_dynamic_delayedStart",
 			config: &workers.Config{
+				MaxWorkers:      uint(runtime.NumCPU()),
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskString(i, true, false, false)
+				return newTaskString(i, false, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			contextTimeout:  true,
+			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
+			expectedErrors:  []error{},
 			delayedStart:    true,
-			twoSetsOfTasks:  true,
 		},
+
 		{
 			name: "taskString_fixed_delayedStart",
 			config: &workers.Config{
@@ -157,13 +144,11 @@ func TestCancelContext(t *testing.T) {
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskString(i, true, false, false)
+				return newTaskString(i, false, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			contextTimeout:  true,
+			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
+			expectedErrors:  []error{},
 			delayedStart:    true,
-			twoSetsOfTasks:  true,
 		},
 
 		{
@@ -173,13 +158,11 @@ func TestCancelContext(t *testing.T) {
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskErr(i, true, false, false)
+				return newTaskErr(i, false, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			contextTimeout:  true,
+			expectedErrors:  []error{},
 			delayedStart:    true,
-			twoSetsOfTasks:  true,
 		},
 		{
 			name: "taskError_fixed_delayedStart",
@@ -189,13 +172,11 @@ func TestCancelContext(t *testing.T) {
 			},
 			nTasks: 5,
 			task: func(i int) interface{} {
-				return newTaskErr(i, true, false, false)
+				return newTaskErr(i, false, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
-			contextTimeout:  true,
+			expectedErrors:  []error{},
 			delayedStart:    true,
-			twoSetsOfTasks:  true,
 		},
 	}
 
