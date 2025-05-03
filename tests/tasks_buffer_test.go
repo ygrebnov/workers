@@ -39,10 +39,7 @@ func TestTasksBuffer(t *testing.T) {
 		},
 
 		{
-			name: "taskString_dynamic_delayedStart_noBuffer",
-			config: &workers.Config{
-				MaxWorkers: uint(runtime.NumCPU()),
-			},
+			name:   "taskString_dynamic_delayedStart_noBuffer",
 			nTasks: 1,
 			task: func(i int) interface{} {
 				return newTaskString(i, false, false, false)
