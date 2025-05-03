@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ygrebnov/workers"
@@ -37,29 +38,77 @@ func getTasks(start, end, step int) []interface{} {
 
 func BenchmarkWorkers(b *testing.B) {
 	tests := []struct {
-		name       string
-		maxWorkers uint
-		tasks      []interface{}
+		name             string
+		maxWorkers       uint
+		bufferSize       int
+		startImmediately bool
+		tasks            []interface{}
 	}{
-		// less big tasks.
-		{"fixed_less_big", uint(runtime.NumCPU()), getTasks(100000, 1000000, 100000)},
-		{"dynamic_less_big", 0, getTasks(100000, 1000000, 100000)},
-		//{"fixed4_n8_size10_wait50", uint(runtime.NumCPU()), tasksN8Size10},
-		//{"dynamic_n8_size10_wait50", 0, tasksN8Size10},
+		// less big tasks, start immediately.
+		{
+			name:             "fixed_less_big_start_immediately",
+			maxWorkers:       uint(runtime.NumCPU()),
+			startImmediately: true,
+			tasks:            getTasks(10_000_000, 100_000_000, 10_000_000),
+		},
+		{
+			name:             "dynamic_less_big_start_immediately",
+			startImmediately: true,
+			tasks:            getTasks(10_000_000, 100_000_000, 10_000_000),
+		},
 
-		// more small tasks.
-		{"fixed_more_small", uint(runtime.NumCPU()), getTasks(100, 500, 2)},
-		{"dynamic_more_small", 0, getTasks(100, 500, 2)},
-		//{"fixed4_n256_size2_wait50", uint(runtime.NumCPU()), tasksN256Size2},
-		//{"dynamic_n256_size2_wait50", 0, tasksN256Size2},
+		// less big tasks, accumulate.
+		{
+			name:       "fixed_less_big_accumulate",
+			maxWorkers: uint(runtime.NumCPU()),
+			bufferSize: 9,
+			tasks:      getTasks(10_000_000, 100_000_000, 10_000_000),
+		},
+		{
+			name:       "dynamic_less_big_accumulate",
+			bufferSize: 9,
+			tasks:      getTasks(10_000_000, 100_000_000, 10_000_000),
+		},
+
+		// more small tasks, start immediately.
+		{
+			name:             "fixed_more_small_start_immediately",
+			maxWorkers:       uint(runtime.NumCPU()),
+			startImmediately: true,
+			tasks:            getTasks(100, 5000, 2),
+		},
+		{
+			name:             "dynamic_more_small_start_immediately",
+			startImmediately: true,
+			tasks:            getTasks(100, 5000, 2),
+		},
+
+		// more small tasks, accumulate tasks.
+		{
+			name:       "fixed_more_small_accumulate",
+			maxWorkers: uint(runtime.NumCPU()),
+			bufferSize: 2450,
+			tasks:      getTasks(100, 5000, 2),
+		},
+		{
+			name:       "dynamic_more_small_accumulate",
+			bufferSize: 2450,
+			tasks:      getTasks(100, 5000, 2),
+		},
 	}
 	for _, test := range tests {
 		b.Run(test.name, func(b *testing.B) {
 			for range b.N {
 				w := workers.New[string](
 					context.Background(),
-					&workers.Config{MaxWorkers: test.maxWorkers, StartImmediately: true},
+					&workers.Config{
+						MaxWorkers:       test.maxWorkers,
+						StartImmediately: test.startImmediately,
+						TasksBufferSize:  uint(test.bufferSize),
+					},
 				)
+
+				wg := sync.WaitGroup{}
 
 				go func() {
 					for range len(test.tasks) {
@@ -67,15 +116,26 @@ func BenchmarkWorkers(b *testing.B) {
 						case <-w.GetResults():
 						case <-w.GetErrors():
 						}
+						wg.Done()
 					}
 				}()
 
 				for _, task := range test.tasks {
+					wg.Add(1)
 					err := w.AddTask(task)
 					if err != nil {
 						b.Fatal(err)
 					}
 				}
+
+				if !test.startImmediately {
+					w.Start(context.Background())
+				}
+
+				wg.Wait()
+
+				close(w.GetResults())
+				close(w.GetErrors())
 			}
 		})
 	}
