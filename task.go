@@ -6,6 +6,8 @@ import (
 	"fmt"
 )
 
+var ErrInvalidTaskType = errors.New("invalid task type")
+
 type task[R interface{}] interface {
 	execute(ctx context.Context) (R, error)
 }
@@ -22,7 +24,7 @@ func newTask[R interface{}](fn interface{}) (task[R], error) {
 		return &taskError[R]{fn: typed}, nil
 
 	default:
-		return nil, errors.New("invalid task type")
+		return nil, ErrInvalidTaskType
 	}
 }
 
