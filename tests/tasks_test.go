@@ -7,7 +7,7 @@ import (
 )
 
 func newTaskStringError(n int, long, e, p bool) func(ctx context.Context) (string, error) {
-	return func(ctx context.Context) (string, error) {
+	return func(context.Context) (string, error) {
 		if long {
 			// Simulate a long-running task
 			time.Sleep(time.Millisecond * 60 * time.Duration(n))
@@ -27,7 +27,7 @@ func newTaskStringError(n int, long, e, p bool) func(ctx context.Context) (strin
 }
 
 func newTaskString(n int, long, e, p bool) func(ctx context.Context) string {
-	return func(ctx context.Context) string {
+	return func(context.Context) string {
 		if long {
 			// Simulate a long-running task
 			time.Sleep(time.Millisecond * 60 * time.Duration(n))
@@ -47,7 +47,7 @@ func newTaskString(n int, long, e, p bool) func(ctx context.Context) string {
 }
 
 func newTaskErr(n int, long, e, p bool) func(ctx context.Context) error {
-	return func(ctx context.Context) error {
+	return func(context.Context) error {
 		if long {
 			// Simulate a long-running task
 			time.Sleep(time.Millisecond * 60 * time.Duration(n))

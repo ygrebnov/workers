@@ -40,7 +40,7 @@ type errAddTask struct {
 	i          int
 }
 
-func testFn(tc testCase) func(*testing.T) {
+func testFn(tc *testCase) func(*testing.T) {
 	return func(t *testing.T) {
 		var cancel context.CancelFunc
 		ctx := context.Background()

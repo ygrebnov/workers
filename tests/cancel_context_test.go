@@ -200,6 +200,6 @@ func TestCancelContext(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, testFn(test))
+		t.Run(test.name, testFn(&test))
 	}
 }
