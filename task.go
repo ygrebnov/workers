@@ -54,7 +54,7 @@ func (t *taskResultError[R]) execute(ctx context.Context) (R, error) {
 
 	select {
 	case <-ctx.Done():
-		return *(new(R)), ctx.Err()
+		return *(new(R)), fmt.Errorf("task execution cancelled: %w", ctx.Err())
 	case <-done:
 		return result, err
 	}
@@ -86,7 +86,7 @@ func (t *taskResult[R]) execute(ctx context.Context) (R, error) {
 
 	select {
 	case <-ctx.Done():
-		return *(new(R)), ctx.Err()
+		return *(new(R)), fmt.Errorf("task execution cancelled: %w", ctx.Err())
 	case <-done:
 		return result, err
 	}
@@ -115,7 +115,7 @@ func (t *taskError[R]) execute(ctx context.Context) (R, error) {
 
 	select {
 	case <-ctx.Done():
-		return *(new(R)), ctx.Err()
+		return *(new(R)), fmt.Errorf("task execution cancelled: %w", ctx.Err())
 	case <-done:
 		return *(new(R)), err
 	}

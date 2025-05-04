@@ -1,3 +1,5 @@
+include $(CURDIR)/tools/tools.mk
+
 ROOT_PATH := $(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 COVERAGE_PATH := $(ROOT_PATH).coverage/
 PROFILING_PATH := $(ROOT_PATH).profiling/
@@ -11,8 +13,8 @@ dir-coverage:
 dir-profiling:
 	@mkdir -p $(PROFILING_PATH)
 
-lint:
-	@golangci-lint run
+lint: install-golangci-lint
+	$(GOLANGCI_LINT) run
 
 test: dir-coverage
 	@go test -v -coverpkg=./... ./... -coverprofile $(COVERAGE_PATH)cp.out

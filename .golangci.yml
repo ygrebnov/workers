@@ -96,6 +96,7 @@ issues:
       linters:
         - dogsled
         - dupl
+        - gocyclo
         - gosec
         - funlen
         - govet
