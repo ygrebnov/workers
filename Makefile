@@ -1,8 +1,8 @@
-include $(CURDIR)/tools/tools.mk
-
 ROOT_PATH := $(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 COVERAGE_PATH := $(ROOT_PATH).coverage/
 PROFILING_PATH := $(ROOT_PATH).profiling/
+
+include $(CURDIR)/tools/tools.mk
 
 clean:
 	@rm -rf $(BUILD_PATH)
@@ -17,9 +17,9 @@ lint: install-golangci-lint
 	$(GOLANGCI_LINT) run
 
 test: dir-coverage
-	@go test -v -coverpkg=./... ./... -coverprofile $(COVERAGE_PATH)cp.out
-	@go tool cover -func=$(COVERAGE_PATH)cp.out -o $(COVERAGE_PATH)coverage.txt
-	@go tool cover -html=$(COVERAGE_PATH)cp.out -o $(COVERAGE_PATH)coverage.html
+	@go test -v -coverpkg=./... ./... -coverprofile $(COVERAGE_PATH)coverage.txt
+	@go tool cover -func=$(COVERAGE_PATH)coverage.txt -o $(COVERAGE_PATH)functions.txt
+	@go tool cover -html=$(COVERAGE_PATH)coverage.txt -o $(COVERAGE_PATH)coverage.html
 
 bench: dir-coverage
 	@go test ./tests/... -memprofile mem.prof -bench=. --run BenchmarkWorkers
