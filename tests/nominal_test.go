@@ -20,7 +20,6 @@ func TestNominal(t *testing.T) {
 				return newTaskStringError(i, false, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
-			expectedErrors:  []error{},
 		},
 
 		{
@@ -34,7 +33,6 @@ func TestNominal(t *testing.T) {
 				return newTaskStringError(i, false, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
-			expectedErrors:  []error{},
 		},
 
 		{
@@ -47,7 +45,6 @@ func TestNominal(t *testing.T) {
 				return newTaskString(i, false, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
-			expectedErrors:  []error{},
 		},
 
 		{
@@ -61,7 +58,6 @@ func TestNominal(t *testing.T) {
 				return newTaskString(i, false, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
-			expectedErrors:  []error{},
 		},
 
 		{
@@ -74,7 +70,6 @@ func TestNominal(t *testing.T) {
 				return newTaskErr(i, false, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{},
 		},
 
 		{
@@ -88,7 +83,6 @@ func TestNominal(t *testing.T) {
 				return newTaskErr(i, false, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{},
 		},
 
 		// delayed start tests.
@@ -102,7 +96,6 @@ func TestNominal(t *testing.T) {
 				return newTaskStringError(i, false, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
-			expectedErrors:  []error{},
 			delayedStart:    true,
 		},
 
@@ -117,7 +110,6 @@ func TestNominal(t *testing.T) {
 				return newTaskStringError(i, false, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
-			expectedErrors:  []error{},
 			delayedStart:    true,
 		},
 
@@ -132,7 +124,6 @@ func TestNominal(t *testing.T) {
 				return newTaskString(i, false, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
-			expectedErrors:  []error{},
 			delayedStart:    true,
 		},
 
@@ -147,7 +138,6 @@ func TestNominal(t *testing.T) {
 				return newTaskString(i, false, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
-			expectedErrors:  []error{},
 			delayedStart:    true,
 		},
 
@@ -161,7 +151,6 @@ func TestNominal(t *testing.T) {
 				return newTaskErr(i, false, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{},
 			delayedStart:    true,
 		},
 		{
@@ -175,7 +164,6 @@ func TestNominal(t *testing.T) {
 				return newTaskErr(i, false, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{},
 			delayedStart:    true,
 		},
 	}

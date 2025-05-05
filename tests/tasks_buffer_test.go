@@ -20,7 +20,7 @@ func TestTasksBuffer(t *testing.T) {
 				return newTaskStringError(i, false, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
-			expectedErrors:  []error{},
+			expectedErrors:  []string{},
 		},
 
 		{
@@ -35,7 +35,7 @@ func TestTasksBuffer(t *testing.T) {
 				return newTaskStringError(i, false, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
-			expectedErrors:  []error{},
+			expectedErrors:  []string{},
 		},
 
 		{
@@ -44,9 +44,9 @@ func TestTasksBuffer(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskString(i, false, false, false)
 			},
-			expectedAddTaskError: &errAddTask{err: workers.ErrInvalidState, i: 1},
+			expectedAddTaskError: &errAddTask{err: workers.ErrInvalidState.Error(), i: 1},
 			expectedResults:      []string{},
-			expectedErrors:       []error{},
+			expectedErrors:       []string{},
 			delayedStart:         true,
 		},
 
@@ -62,7 +62,7 @@ func TestTasksBuffer(t *testing.T) {
 			},
 			expectedAddTaskError: &errAddTask{i: 5, shoudPanic: true},
 			expectedResults:      getExpectedResults(1, 2, 3, 4),
-			expectedErrors:       []error{},
+			expectedErrors:       []string{},
 			delayedStart:         true,
 		},
 	}

@@ -8,6 +8,8 @@ import (
 	"github.com/ygrebnov/workers"
 )
 
+var errorTaskContextCancelled = "task execution cancelled: " + context.DeadlineExceeded.Error()
+
 func TestCancelContext(t *testing.T) {
 	tests := []testCase{
 		// immediate start tests.
@@ -21,7 +23,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskStringError(i, true, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			twoSetsOfTasks:  true,
 			contextTimeout:  true,
 		},
@@ -36,7 +38,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskStringError(i, true, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			twoSetsOfTasks:  true,
 			contextTimeout:  true,
 		},
@@ -51,7 +53,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskString(i, true, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			twoSetsOfTasks:  true,
 			contextTimeout:  true,
 		},
@@ -66,7 +68,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskString(i, true, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			twoSetsOfTasks:  true,
 			contextTimeout:  true,
 		},
@@ -81,7 +83,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskErr(i, true, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			twoSetsOfTasks:  true,
 			contextTimeout:  true,
 		},
@@ -96,7 +98,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskErr(i, true, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			twoSetsOfTasks:  true,
 			contextTimeout:  true,
 		},
@@ -112,7 +114,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskStringError(i, true, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			contextTimeout:  true,
 			delayedStart:    true,
 			twoSetsOfTasks:  true,
@@ -128,7 +130,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskStringError(i, true, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			contextTimeout:  true,
 			delayedStart:    true,
 			twoSetsOfTasks:  true,
@@ -144,7 +146,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskString(i, true, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			contextTimeout:  true,
 			delayedStart:    true,
 			twoSetsOfTasks:  true,
@@ -160,7 +162,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskString(i, true, false, false)
 			},
 			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			contextTimeout:  true,
 			delayedStart:    true,
 			twoSetsOfTasks:  true,
@@ -176,7 +178,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskErr(i, true, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			contextTimeout:  true,
 			delayedStart:    true,
 			twoSetsOfTasks:  true,
@@ -192,7 +194,7 @@ func TestCancelContext(t *testing.T) {
 				return newTaskErr(i, true, false, false)
 			},
 			expectedResults: []string{},
-			expectedErrors:  []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
 			contextTimeout:  true,
 			delayedStart:    true,
 			twoSetsOfTasks:  true,

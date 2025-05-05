@@ -19,7 +19,7 @@ type testCase struct {
 	task                 func(int) interface{}
 	expectedAddTaskError *errAddTask
 	expectedResults      []string
-	expectedErrors       []error
+	expectedErrors       []string
 	contextTimeout       bool
 	twoSetsOfTasks       bool
 	delayedStart         bool
@@ -35,7 +35,7 @@ func getExpectedResults(results ...int) []string {
 }
 
 type errAddTask struct {
-	err        error
+	err        string
 	shoudPanic bool
 	i          int
 }
@@ -82,7 +82,7 @@ func testFn(tc *testCase) func(*testing.T) {
 				if tc.expectedAddTaskError.shoudPanic {
 					require.Panics(t, func() { _ = w.AddTask(tc.task(i)) })
 				} else {
-					require.ErrorIs(t, w.AddTask(tc.task(i)), tc.expectedAddTaskError.err)
+					require.ErrorContains(t, w.AddTask(tc.task(i)), tc.expectedAddTaskError.err)
 				}
 			} else {
 				err := w.AddTask(tc.task(i))
@@ -136,7 +136,7 @@ func checkResults(
 	actualResults []string,
 	expectedResults []string,
 	actualErrors []error,
-	expectedErrors []error,
+	expectedErrors []string,
 ) {
 	if len(actualResults) != len(expectedResults) {
 		t.Errorf(
@@ -177,7 +177,7 @@ func checkResults(
 		return actualErrors[i].Error() < actualErrors[j].Error()
 	})
 	for i := range actualErrors {
-		if actualErrors[i].Error() != expectedErrors[i].Error() {
+		if actualErrors[i].Error() != expectedErrors[i] {
 			t.Errorf(
 				"Elements with index %d do not match:\n%v (expected)\n%v (actual)",
 				i,
