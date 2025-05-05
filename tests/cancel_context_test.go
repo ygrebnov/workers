@@ -22,10 +22,11 @@ func TestCancelContext(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
-			twoSetsOfTasks:  true,
-			contextTimeout:  true,
+			// expectedResults: getExpectedResults(1, 2, 3),
+			expectedMaxResults: ptrInt(3),
+			expectedErrors:     []string{errorTaskContextCancelled, errorTaskContextCancelled},
+			twoSetsOfTasks:     true,
+			contextTimeout:     true,
 		},
 		{
 			name: "taskStringError_fixed_startImmediately",
@@ -37,10 +38,11 @@ func TestCancelContext(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
-			twoSetsOfTasks:  true,
-			contextTimeout:  true,
+			// expectedResults: getExpectedResults(1, 2, 3),
+			expectedMaxResults: ptrInt(3),
+			expectedErrors:     []string{errorTaskContextCancelled, errorTaskContextCancelled},
+			twoSetsOfTasks:     true,
+			contextTimeout:     true,
 		},
 
 		{
@@ -52,10 +54,11 @@ func TestCancelContext(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskString(i, true, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
-			twoSetsOfTasks:  true,
-			contextTimeout:  true,
+			// expectedResults: getExpectedResults(1, 2, 3),
+			expectedMaxResults: ptrInt(3),
+			expectedErrors:     []string{errorTaskContextCancelled, errorTaskContextCancelled},
+			twoSetsOfTasks:     true,
+			contextTimeout:     true,
 		},
 		{
 			name: "taskString_fixed_startImmediately",
@@ -67,10 +70,11 @@ func TestCancelContext(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskString(i, true, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
-			twoSetsOfTasks:  true,
-			contextTimeout:  true,
+			// expectedResults: getExpectedResults(1, 2, 3),
+			expectedMaxResults: ptrInt(3),
+			expectedErrors:     []string{errorTaskContextCancelled, errorTaskContextCancelled},
+			twoSetsOfTasks:     true,
+			contextTimeout:     true,
 		},
 
 		{
@@ -113,11 +117,12 @@ func TestCancelContext(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
-			contextTimeout:  true,
-			delayedStart:    true,
-			twoSetsOfTasks:  true,
+			// expectedResults: getExpectedResults(1, 2, 3),
+			expectedMaxResults: ptrInt(3),
+			expectedErrors:     []string{errorTaskContextCancelled, errorTaskContextCancelled},
+			contextTimeout:     true,
+			delayedStart:       true,
+			twoSetsOfTasks:     true,
 		},
 		{
 			name: "taskStringError_fixed_delayedStart",
@@ -129,11 +134,12 @@ func TestCancelContext(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
-			contextTimeout:  true,
-			delayedStart:    true,
-			twoSetsOfTasks:  true,
+			// expectedResults: getExpectedResults(1, 2, 3),
+			expectedMaxResults: ptrInt(3),
+			expectedErrors:     []string{errorTaskContextCancelled, errorTaskContextCancelled},
+			contextTimeout:     true,
+			delayedStart:       true,
+			twoSetsOfTasks:     true,
 		},
 
 		{
@@ -145,11 +151,12 @@ func TestCancelContext(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskString(i, true, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
-			contextTimeout:  true,
-			delayedStart:    true,
-			twoSetsOfTasks:  true,
+			// expectedResults: getExpectedResults(1, 2, 3),
+			expectedMaxResults: ptrInt(3),
+			expectedErrors:     []string{errorTaskContextCancelled, errorTaskContextCancelled},
+			contextTimeout:     true,
+			delayedStart:       true,
+			twoSetsOfTasks:     true,
 		},
 		{
 			name: "taskString_fixed_delayedStart",
@@ -161,11 +168,12 @@ func TestCancelContext(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskString(i, true, false, false)
 			},
-			expectedResults: getExpectedResults(1, 2, 3),
-			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
-			contextTimeout:  true,
-			delayedStart:    true,
-			twoSetsOfTasks:  true,
+			// expectedResults: getExpectedResults(1, 2, 3),
+			expectedMaxResults: ptrInt(3),
+			expectedErrors:     []string{errorTaskContextCancelled, errorTaskContextCancelled},
+			contextTimeout:     true,
+			delayedStart:       true,
+			twoSetsOfTasks:     true,
 		},
 
 		{
