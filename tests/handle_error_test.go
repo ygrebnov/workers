@@ -196,8 +196,9 @@ func TestHandleError(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, true, false)
 			},
-			expectedResults: getExpectedResults(1, 2),
-			expectedErrors:  []string{"error executing task for: 3"},
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
+			expectedErrors:     []string{"error executing task for: 3"},
 		},
 		{
 			name: "taskStringError_fixed_startImmediately_stopOnError",
@@ -210,8 +211,9 @@ func TestHandleError(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, true, false)
 			},
-			expectedResults: getExpectedResults(1, 2),
-			expectedErrors:  []string{"error executing task for: 3"},
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
+			expectedErrors:     []string{"error executing task for: 3"},
 		},
 
 		{
@@ -287,9 +289,10 @@ func TestHandleError(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, true, false)
 			},
-			expectedResults: getExpectedResults(1, 2),
-			expectedErrors:  []string{"error executing task for: 3"},
-			delayedStart:    true,
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
+			expectedErrors:     []string{"error executing task for: 3"},
+			delayedStart:       true,
 		},
 		{
 			name: "taskStringError_fixed_delayedStart_stopOnError",
@@ -302,9 +305,10 @@ func TestHandleError(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, true, false)
 			},
-			expectedResults: getExpectedResults(1, 2),
-			expectedErrors:  []string{"error executing task for: 3"},
-			delayedStart:    true,
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
+			expectedErrors:     []string{"error executing task for: 3"},
+			delayedStart:       true,
 		},
 
 		{

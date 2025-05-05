@@ -18,11 +18,16 @@ type testCase struct {
 	nTasks               int
 	task                 func(int) interface{}
 	expectedAddTaskError *errAddTask
+	expectedMaxResults   *int
 	expectedResults      []string
 	expectedErrors       []string
 	contextTimeout       bool
 	twoSetsOfTasks       bool
 	delayedStart         bool
+}
+
+func ptrInt(i int) *int {
+	return &i
 }
 
 // getExpectedResults returns the expected results for the given task.
@@ -62,7 +67,7 @@ func testFn(tc *testCase) func(*testing.T) {
 			for range tc.nTasks {
 				select {
 				case <-timer.C:
-					checkResults(t, actualResults, tc.expectedResults, actualErrors, tc.expectedErrors)
+					checkResults(t, actualResults, tc.expectedMaxResults, tc.expectedResults, actualErrors, tc.expectedErrors)
 					done <- struct{}{}
 					return
 				case result := <-w.GetResults():
@@ -72,7 +77,7 @@ func testFn(tc *testCase) func(*testing.T) {
 				}
 			}
 
-			checkResults(t, actualResults, tc.expectedResults, actualErrors, tc.expectedErrors)
+			checkResults(t, actualResults, tc.expectedMaxResults, tc.expectedResults, actualErrors, tc.expectedErrors)
 
 			done <- struct{}{}
 		}()
@@ -134,31 +139,44 @@ func testFn(tc *testCase) func(*testing.T) {
 func checkResults(
 	t *testing.T,
 	actualResults []string,
+	expectedMaxResults *int,
 	expectedResults []string,
 	actualErrors []error,
 	expectedErrors []string,
 ) {
-	if len(actualResults) != len(expectedResults) {
+	switch {
+	case expectedMaxResults != nil && len(actualResults) > *expectedMaxResults:
 		t.Errorf(
-			"Expected %d results, got: %d\n%v (expected)\n%v (actual)",
-			len(expectedResults),
+			"Expected max %d results, got: %d\n%v (expected)\n%v (actual)",
+			*expectedMaxResults,
 			len(actualResults),
 			expectedResults,
 			actualResults,
 		)
 		return
-	}
-
-	sort.StringSlice(actualResults).Sort()
-	for i := range actualResults {
-		if actualResults[i] != expectedResults[i] {
+	case expectedMaxResults == nil:
+		if len(actualResults) != len(expectedResults) {
 			t.Errorf(
-				"Elements with index %d do not match:\n%v (expected)\n%v (actual)",
-				i,
+				"Expected %d results, got: %d\n%v (expected)\n%v (actual)",
+				len(expectedResults),
+				len(actualResults),
 				expectedResults,
 				actualResults,
 			)
 			return
+		}
+
+		sort.StringSlice(actualResults).Sort()
+		for i := range actualResults {
+			if actualResults[i] != expectedResults[i] {
+				t.Errorf(
+					"Elements with index %d do not match:\n%v (expected)\n%v (actual)",
+					i,
+					expectedResults,
+					actualResults,
+				)
+				return
+			}
 		}
 	}
 

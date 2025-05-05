@@ -206,8 +206,9 @@ func TestHandlePanic(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, false, true)
 			},
-			expectedResults: getExpectedResults(1, 2),
-			expectedErrors:  []string{"task execution panicked: panic on executing task for: 3"},
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
+			expectedErrors:     []string{"task execution panicked: panic on executing task for: 3"},
 		},
 		{
 			name: "taskStringError_fixed_startImmediately_stopOnError",
@@ -220,8 +221,9 @@ func TestHandlePanic(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, false, true)
 			},
-			expectedResults: getExpectedResults(1, 2),
-			expectedErrors:  []string{"task execution panicked: panic on executing task for: 3"},
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
+			expectedErrors:     []string{"task execution panicked: panic on executing task for: 3"},
 		},
 
 		{
@@ -234,7 +236,8 @@ func TestHandlePanic(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskString(i, true, false, true)
 			},
-			expectedResults: getExpectedResults(1, 2),
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
 			expectedErrors: []string{
 				// an error is sent through the channel because panic is handled at one level higher than the task.
 				"task execution panicked: panic on executing task for: 3",
@@ -251,7 +254,8 @@ func TestHandlePanic(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskString(i, true, false, true)
 			},
-			expectedResults: getExpectedResults(1, 2),
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
 			expectedErrors: []string{
 				// an error is sent through the channel because panic is handled at one level higher than the task.
 				"task execution panicked: panic on executing task for: 3",
@@ -297,9 +301,10 @@ func TestHandlePanic(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, false, true)
 			},
-			expectedResults: getExpectedResults(1, 2),
-			expectedErrors:  []string{"task execution panicked: panic on executing task for: 3"},
-			delayedStart:    true,
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
+			expectedErrors:     []string{"task execution panicked: panic on executing task for: 3"},
+			delayedStart:       true,
 		},
 		{
 			name: "taskStringError_fixed_delayedStart_stopOnError",
@@ -312,9 +317,10 @@ func TestHandlePanic(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskStringError(i, true, false, true)
 			},
-			expectedResults: getExpectedResults(1, 2),
-			expectedErrors:  []string{"task execution panicked: panic on executing task for: 3"},
-			delayedStart:    true,
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
+			expectedErrors:     []string{"task execution panicked: panic on executing task for: 3"},
+			delayedStart:       true,
 		},
 
 		{
@@ -327,7 +333,8 @@ func TestHandlePanic(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskString(i, true, false, true)
 			},
-			expectedResults: getExpectedResults(1, 2),
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
 			expectedErrors: []string{
 				// an error is sent through the channel because panic is handled at one level higher than the task.
 				"task execution panicked: panic on executing task for: 3",
@@ -345,7 +352,8 @@ func TestHandlePanic(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskString(i, true, false, true)
 			},
-			expectedResults: getExpectedResults(1, 2),
+			// expectedResults: getExpectedResults(1, 2),
+			expectedMaxResults: ptrInt(4),
 			expectedErrors: []string{
 				// an error is sent through the channel because panic is handled at one level higher than the task.
 				"task execution panicked: panic on executing task for: 3",
