@@ -60,7 +60,7 @@ func TestTasksBuffer(t *testing.T) {
 			task: func(i int) interface{} {
 				return newTaskString(i, false, false, false)
 			},
-			expectedAddTaskError: &errAddTask{i: 5, shoudPanic: true},
+			expectedAddTaskError: &errAddTask{i: 5, shouldPanic: true},
 			expectedResults:      getExpectedResults(1, 2, 3, 4),
 			expectedErrors:       []string{},
 			delayedStart:         true,

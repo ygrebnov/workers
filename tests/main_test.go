@@ -35,9 +35,9 @@ func getExpectedResults(results ...int) []string {
 }
 
 type errAddTask struct {
-	err        string
-	shoudPanic bool
-	i          int
+	err         string
+	shouldPanic bool
+	i           int
 }
 
 func testFn(tc *testCase) func(*testing.T) {
@@ -79,7 +79,7 @@ func testFn(tc *testCase) func(*testing.T) {
 
 		for i := 1; i <= tc.nTasks; i++ {
 			if tc.expectedAddTaskError != nil && tc.expectedAddTaskError.i == i {
-				if tc.expectedAddTaskError.shoudPanic {
+				if tc.expectedAddTaskError.shouldPanic {
 					require.Panics(t, func() { _ = w.AddTask(tc.task(i)) })
 				} else {
 					require.ErrorContains(t, w.AddTask(tc.task(i)), tc.expectedAddTaskError.err)
