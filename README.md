@@ -1,4 +1,4 @@
-[![Workers](https://yaroslavgrebnov.com/assets/images/workers_lightweight_go_library_for_executing_multiple_tasks_concurrently-4b69e8ac142599731c323ca71483a879.png)](https://yaroslavgrebnov.com/projects/workers/description)
+[![Workers](https://yaroslavgrebnov.com/assets/images/workers_lightweight_go_library_for_executing_multiple_tasks_concurrently-4b69e8ac142599731c323ca71483a879.png)](https://yaroslavgrebnov.com/projects/workers/overview)
 
 **Workers** is a **lightweight Go library** for executing **multiple tasks concurrently**, with support for either a dynamic or fixed number of workers. Written by [ygrebnov](https://github.com/ygrebnov).
 
@@ -11,7 +11,7 @@ Designed to be **simple and easy to use**, it allows executing tasks concurrentl
 [![codecov](https://codecov.io/gh/ygrebnov/workers/graph/badge.svg?token=1TY5NH8IF6)](https://codecov.io/gh/ygrebnov/workers)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ygrebnov/workers)](https://goreportcard.com/report/github.com/ygrebnov/workers)
 
-[User Guide](https://yaroslavgrebnov.com/projects/workers/description) | [Examples](https://yaroslavgrebnov.com/projects/workers/examples) | [Contributing](#contributing)
+[User Guide](https://yaroslavgrebnov.com/projects/workers/overview) | [Examples](https://yaroslavgrebnov.com/projects/workers/examples) | [Contributing](#contributing)
 
 ## Features
 
@@ -38,6 +38,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/ygrebnov/workers"
 )
@@ -56,7 +57,25 @@ func main() {
 	// Type parameter is used to specify the type of task result.
 	w := workers.New[string](context.Background(), &workers.Config{StartImmediately: true})
 
+	wg := sync.WaitGroup{}
+
+	// Receive and print results or handle errors in a separate goroutine.
+	go func() {
+		for range 10 {
+			select {
+			case result := <-w.GetResults():
+				fmt.Println(result)
+			case err := <-w.GetErrors():
+				fmt.Println("error executing task:", err)
+			}
+
+			wg.Done()
+		}
+	}()
+
 	for i := 20; i >= 11; i-- {
+		wg.Add(1)
+
 		// Add ten tasks calculating the Fibonacci number for a given index.
 		// A task is a function that takes a context and returns a string.
 		err := w.AddTask(func(ctx context.Context) string {
@@ -67,15 +86,7 @@ func main() {
 		}
 	}
 
-	// Receive and print results or handle errors.
-	for range 10 {
-		select {
-		case result := <-w.GetResults():
-			fmt.Println(result)
-		case err := <-w.GetErrors():
-			fmt.Println("error executing task:", err)
-		}
-	}
+	wg.Wait() // Wait for all tasks to finish.
 
 	// Close channels.
 	close(w.GetResults())
