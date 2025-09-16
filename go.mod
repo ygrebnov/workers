@@ -1,6 +1,6 @@
 module github.com/ygrebnov/workers
 
-go 1.22.3
+go 1.22
 
 require github.com/stretchr/testify v1.11.1
 

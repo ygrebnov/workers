@@ -98,6 +98,7 @@ issues:
         - dupl
         - gocyclo
         - gosec
+        - gosimple
         - funlen
         - govet
         - lll

@@ -28,11 +28,9 @@ func newTask[R interface{}](fn interface{}) (task[R], error) {
 	}
 }
 
-type taskResultError[R interface{}] struct {
-	fn func(ctx context.Context) (R, error)
-}
-
-func (t *taskResultError[R]) execute(ctx context.Context) (R, error) {
+// execTask centralizes goroutine launch, panic recovery, and ctx cancellation.
+// The `call` closure must do the actual work and return (R, error).
+func execTask[R interface{}](ctx context.Context, call func() (R, error)) (R, error) {
 	var (
 		result R
 		err    error
@@ -44,12 +42,11 @@ func (t *taskResultError[R]) execute(ctx context.Context) (R, error) {
 		defer func() {
 			if ePanic := recover(); ePanic != nil {
 				err = fmt.Errorf("task execution panicked: %v", ePanic)
-				done <- struct{}{}
 			}
+			done <- struct{}{}
 		}()
 
-		result, err = t.fn(ctx)
-		done <- struct{}{}
+		result, err = call()
 	}()
 
 	select {
@@ -58,6 +55,14 @@ func (t *taskResultError[R]) execute(ctx context.Context) (R, error) {
 	case <-done:
 		return result, err
 	}
+}
+
+type taskResultError[R interface{}] struct {
+	fn func(ctx context.Context) (R, error)
+}
+
+func (t *taskResultError[R]) execute(ctx context.Context) (R, error) {
+	return execTask[R](ctx, func() (R, error) { return t.fn(ctx) })
 }
 
 type taskResult[R interface{}] struct {
@@ -65,31 +70,7 @@ type taskResult[R interface{}] struct {
 }
 
 func (t *taskResult[R]) execute(ctx context.Context) (R, error) {
-	var (
-		result R
-		err    error
-	)
-
-	done := make(chan struct{}, 1)
-
-	go func() {
-		defer func() {
-			if ePanic := recover(); ePanic != nil {
-				err = fmt.Errorf("task execution panicked: %v", ePanic)
-				done <- struct{}{}
-			}
-		}()
-
-		result = t.fn(ctx)
-		done <- struct{}{}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return *(new(R)), fmt.Errorf("task execution cancelled: %w", ctx.Err())
-	case <-done:
-		return result, err
-	}
+	return execTask[R](ctx, func() (R, error) { return t.fn(ctx), nil })
 }
 
 type taskError[R interface{}] struct {
@@ -97,26 +78,5 @@ type taskError[R interface{}] struct {
 }
 
 func (t *taskError[R]) execute(ctx context.Context) (R, error) {
-	var err error
-
-	done := make(chan struct{}, 1)
-
-	go func() {
-		defer func() {
-			if ePanic := recover(); ePanic != nil {
-				err = fmt.Errorf("task execution panicked: %v", ePanic)
-				done <- struct{}{}
-			}
-		}()
-
-		err = t.fn(ctx)
-		done <- struct{}{}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return *(new(R)), fmt.Errorf("task execution cancelled: %w", ctx.Err())
-	case <-done:
-		return *(new(R)), err
-	}
+	return execTask[R](ctx, func() (R, error) { var zero R; return zero, t.fn(ctx) })
 }
