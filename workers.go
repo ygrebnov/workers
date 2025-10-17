@@ -76,7 +76,8 @@ type workersStoppable[R interface{}] struct {
 // the Start method must be called explicitly.
 func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 	if config == nil {
-		config = &Config{}
+		cfg := defaultConfig()
+		config = &cfg
 	}
 
 	r := make(chan R, 1024)

@@ -25,7 +25,16 @@ const (
 // defaultConfig centralizes default values for Config.
 // This acts as the library's "model" of defaults.
 func defaultConfig() Config {
-	return Config{}
+	return Config{
+		// Dynamic pool by default (MaxWorkers = 0)
+		MaxWorkers: 0,
+		// Start immediately for ease of use
+		StartImmediately: false,
+		// Do not stop on first error by default
+		StopOnError: false,
+		// No tasks buffer by default; acts as unbuffered unless user sets it
+		TasksBufferSize: 0,
+	}
 }
 
 // WithFixedPool selects a fixed-size worker pool with the given capacity (must be > 0).
