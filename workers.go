@@ -13,15 +13,19 @@ type Config struct {
 	// MaxWorkers defines workers pool maximum size.
 	// Zero (default) means that the size will be set dynamically.
 	// Zero value is suitable for the majority of cases.
+	// Default: 0 (dynamic pool)
 	MaxWorkers uint
 
 	// StartImmediately defines whether workers start executing tasks immediately or not.
+	// Default: false
 	StartImmediately bool
 
 	// StopOnError stops tasks execution if an error occurs.
+	// Default: false
 	StopOnError bool
 
 	// TasksBufferSize defines the size of the tasks channel buffer.
+	// Default: 0 (unbuffered)
 	TasksBufferSize uint
 
 	// ResultsBufferSize defines the size of the results channel buffer.
@@ -84,6 +88,10 @@ type workersStoppable[R interface{}] struct {
 }
 
 // New creates a new Workers object instance and returns it.
+//
+// Deprecated: This Config-based constructor will be deprecated in a future release.
+// Prefer NewOptions(ctx, opts...) which will become the primary New in the next major version.
+//
 // The Workers object is not started automatically.
 // To start it, either 'StartImmediately' configuration option must be set to true or
 // the Start method must be called explicitly.
@@ -91,6 +99,10 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 	if config == nil {
 		cfg := defaultConfig()
 		config = &cfg
+	}
+
+	if err := validateConfig(config); err != nil {
+		panic(err)
 	}
 
 	r := make(chan R, config.ResultsBufferSize)

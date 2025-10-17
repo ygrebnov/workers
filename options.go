@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// Option configures Workers. Use NewWithOptions(ctx, opts...) to construct Workers via options.
+// Option configures Workers. Use NewOptions(ctx, opts...) to construct Workers via options.
 type Option func(*configOptions)
 
 // internal builder state for options assembly.
@@ -21,20 +21,6 @@ const (
 	poolDynamic
 	poolFixed
 )
-
-// defaultConfig centralizes default values for Config.
-// This acts as the library's "model" of defaults.
-func defaultConfig() Config {
-	return Config{
-		MaxWorkers:                  0,
-		StartImmediately:            false,
-		StopOnError:                 false,
-		TasksBufferSize:             0,
-		ResultsBufferSize:           1024,
-		ErrorsBufferSize:            1024,
-		StopOnErrorErrorsBufferSize: 100,
-	}
-}
 
 // WithFixedPool selects a fixed-size worker pool with the given capacity (must be > 0).
 func WithFixedPool(n uint) Option {
@@ -87,9 +73,9 @@ func WithStartImmediately() Option { return func(co *configOptions) { co.cfg.Sta
 // WithStopOnError stops tasks execution when the first error occurs.
 func WithStopOnError() Option { return func(co *configOptions) { co.cfg.StopOnError = true } }
 
-// NewWithOptions creates a new Workers instance using functional options.
+// NewOptions creates a new Workers instance using functional options.
 // It preserves backward compatibility by internally constructing a Config and delegating to New.
-func NewWithOptions[R interface{}](ctx context.Context, opts ...Option) Workers[R] {
+func NewOptions[R interface{}](ctx context.Context, opts ...Option) Workers[R] {
 	co := configOptions{cfg: defaultConfig(), poolSelected: poolUnspecified}
 	for _, opt := range opts {
 		if opt == nil {
@@ -104,10 +90,15 @@ func NewWithOptions[R interface{}](ctx context.Context, opts ...Option) Workers[
 		co.cfg.MaxWorkers = 0
 	}
 
-	// Final sanity checks mirroring existing Config semantics.
-	if co.poolSelected == poolFixed && co.cfg.MaxWorkers == 0 {
-		panic(fmt.Errorf("invalid fixed pool size: %d", co.cfg.MaxWorkers))
+	if err := validateConfig(&co.cfg); err != nil {
+		panic(fmt.Errorf("invalid workers config: %w", err))
 	}
 
 	return New[R](ctx, &co.cfg)
+}
+
+// Deprecated: NewWithOptions will be removed in a future release.
+// Prefer NewOptions, which will be renamed to New (options-based) in the next major version.
+func NewWithOptions[R interface{}](ctx context.Context, opts ...Option) Workers[R] {
+	return NewOptions[R](ctx, opts...)
 }
