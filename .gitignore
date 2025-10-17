@@ -4,3 +4,4 @@ vendor
 .coverage
 .profiling
 /improvements/
+/tools/bin/
