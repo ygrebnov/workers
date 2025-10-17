@@ -23,10 +23,57 @@ Designed to be **simple and easy to use**, it allows executing tasks concurrentl
 
 ## Installation
 
-Requires Go 1.22.3 or later:
+Requires Go 1.22 or later:
 
 ```shell
 go get github.com/ygrebnov/workers
+```
+
+## Constructors
+
+- NewOptions(ctx, opts ...Option): preferred constructor using functional options.
+- New(ctx, *Config): current stable constructor; planned for deprecation in a future major version.
+
+## Defaults
+
+Unless overridden, a new instance uses:
+
+- MaxWorkers: 0 (dynamic pool)
+- StartImmediately: false (call Start() if TasksBufferSize == 0)
+- StopOnError: false
+- TasksBufferSize: 0
+- ResultsBufferSize: 1024
+- ErrorsBufferSize: 1024
+- StopOnErrorErrorsBufferSize: 100
+
+## Options vs Config
+
+Options-based (recommended):
+
+```go
+w := workers.NewOptions[string](
+    context.Background(),
+    workers.WithDynamicPool(),
+    workers.WithStartImmediately(),
+    workers.WithTasksBuffer(16),
+    workers.WithResultsBuffer(2048),
+    workers.WithErrorsBuffer(2048),
+)
+```
+
+Equivalent with Config:
+
+```go
+w := workers.New[string](
+    context.Background(),
+    &workers.Config{
+        // dynamic pool (MaxWorkers=0)
+        StartImmediately:  true,
+        TasksBufferSize:   16,
+        ResultsBufferSize: 2048,
+        ErrorsBufferSize:  2048,
+    },
+)
 ```
 
 ## Usage example
