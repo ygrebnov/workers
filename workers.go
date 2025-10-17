@@ -23,6 +23,19 @@ type Config struct {
 
 	// TasksBufferSize defines the size of the tasks channel buffer.
 	TasksBufferSize uint
+
+	// ResultsBufferSize defines the size of the results channel buffer.
+	// Default: 1024.
+	ResultsBufferSize uint
+
+	// ErrorsBufferSize defines the size of the outgoing errors channel buffer.
+	// Default: 1024.
+	ErrorsBufferSize uint
+
+	// StopOnErrorErrorsBufferSize defines the size of the internal errors buffer used
+	// when StopOnError is enabled. Smaller buffer triggers cancellation quickly.
+	// Default: 100.
+	StopOnErrorErrorsBufferSize uint
 }
 
 // Workers is an interface that defines methods on Workers.
@@ -80,17 +93,19 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 		config = &cfg
 	}
 
-	r := make(chan R, 1024)
+	r := make(chan R, config.ResultsBufferSize)
 
-	eCapacity := 1024
+	// Prepare the channel that workers will write errors to.
+	// In StopOnError mode, workers produce into a smaller internal buffer (errorsBuf)
+	// which the controller drains and forwards to the outward errors channel.
+	var workerErrors chan error
 	if config.StopOnError {
-		eCapacity = 100
+		workerErrors = make(chan error, config.StopOnErrorErrorsBufferSize)
+	} else {
+		workerErrors = make(chan error, config.ErrorsBufferSize)
 	}
-	e := make(chan error, eCapacity)
 
-	newWorkerFn := func() interface{} {
-		return newWorker(r, e)
-	}
+	newWorkerFn := func() interface{} { return newWorker(r, workerErrors) }
 
 	var p pool.Pool
 	if config.MaxWorkers > 0 {
@@ -111,17 +126,18 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 				config:  config,
 				tasks:   tasks,
 				results: r,
-				errors:  make(chan error, 1024),
-				pool:    p,
+				// outward errors channel keeps a larger buffer for receivers
+				errors: make(chan error, config.ErrorsBufferSize),
+				pool:   p,
 			},
-			errorsBuf: e,
+			errorsBuf: workerErrors,
 		}
 	} else {
 		w = &workers[R]{
 			config:  config,
 			tasks:   tasks,
 			results: r,
-			errors:  e,
+			errors:  workerErrors,
 			pool:    p,
 		}
 	}

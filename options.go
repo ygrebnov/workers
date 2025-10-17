@@ -26,14 +26,13 @@ const (
 // This acts as the library's "model" of defaults.
 func defaultConfig() Config {
 	return Config{
-		// Dynamic pool by default (MaxWorkers = 0)
-		MaxWorkers: 0,
-		// Start immediately for ease of use
-		StartImmediately: false,
-		// Do not stop on first error by default
-		StopOnError: false,
-		// No tasks buffer by default; acts as unbuffered unless user sets it
-		TasksBufferSize: 0,
+		MaxWorkers:                  0,
+		StartImmediately:            false,
+		StopOnError:                 false,
+		TasksBufferSize:             0,
+		ResultsBufferSize:           1024,
+		ErrorsBufferSize:            1024,
+		StopOnErrorErrorsBufferSize: 100,
 	}
 }
 
@@ -65,6 +64,21 @@ func WithDynamicPool() Option {
 // WithTasksBuffer sets the size of the tasks channel buffer.
 func WithTasksBuffer(size uint) Option {
 	return func(co *configOptions) { co.cfg.TasksBufferSize = size }
+}
+
+// WithResultsBuffer sets the size of the results channel buffer (default 1024).
+func WithResultsBuffer(size uint) Option {
+	return func(co *configOptions) { co.cfg.ResultsBufferSize = size }
+}
+
+// WithErrorsBuffer sets the size of the outgoing errors channel buffer (default 1024).
+func WithErrorsBuffer(size uint) Option {
+	return func(co *configOptions) { co.cfg.ErrorsBufferSize = size }
+}
+
+// WithStopOnErrorBuffer sets the size of the internal errors buffer used when StopOnError is enabled (default 100).
+func WithStopOnErrorBuffer(size uint) Option {
+	return func(co *configOptions) { co.cfg.StopOnErrorErrorsBufferSize = size }
 }
 
 // WithStartImmediately starts workers execution immediately.
