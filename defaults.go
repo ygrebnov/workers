@@ -16,7 +16,7 @@ func defaultConfig() Config {
 
 // validateConfig performs lightweight invariants checks.
 // It returns nil for all currently valid states; reserved for future validation expansions.
-func validateConfig(cfg *Config) error {
+func validateConfig(_ *Config) error {
 	// MaxWorkers == 0 -> dynamic pool; >0 -> fixed-size pool.
 	// All buffer sizes are uint; zero is a valid choice (unbuffered) except we provide non-zero defaults above.
 	// No hard validation required at the moment.
