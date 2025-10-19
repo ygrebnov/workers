@@ -78,12 +78,10 @@ type workers[R interface{}] struct {
 
 	tasks   chan task[R]
 	results chan R
-	errors  chan error
-}
+	errors  chan error // outward errors channel
 
-type workersStoppable[R interface{}] struct {
-	*workers[R]
-
+	// When StopOnError is enabled, workers produce into this smaller internal buffer,
+	// which Start() drains and forwards into the outward errors channel, then cancels.
 	errorsBuf chan error
 }
 
@@ -131,27 +129,20 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 		tasks = nil // to return error in AddTask.
 	}
 
-	var w Workers[R]
+	w := &workers[R]{
+		config:  config,
+		tasks:   tasks,
+		results: r,
+		pool:    p,
+	}
+
 	if config.StopOnError {
-		w = &workersStoppable[R]{
-			workers: &workers[R]{
-				config:  config,
-				tasks:   tasks,
-				results: r,
-				// outward errors channel keeps a larger buffer for receivers
-				errors: make(chan error, config.ErrorsBufferSize),
-				pool:   p,
-			},
-			errorsBuf: workerErrors,
-		}
+		// outward errors channel keeps a larger buffer for receivers
+		w.errors = make(chan error, config.ErrorsBufferSize)
+		w.errorsBuf = workerErrors
 	} else {
-		w = &workers[R]{
-			config:  config,
-			tasks:   tasks,
-			results: r,
-			errors:  workerErrors,
-			pool:    p,
-		}
+		// in non-stoppable mode, workers write directly to the outward errors channel
+		w.errors = workerErrors
 	}
 
 	if config.StartImmediately {
@@ -167,51 +158,39 @@ func (w *workers[R]) Start(ctx context.Context) {
 		if w.tasks == nil {
 			w.tasks = make(chan task[R])
 		}
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					w.tasks = nil
-					return
 
-				case t := <-w.tasks:
-					go w.dispatch(ctx, t)
-				}
-			}
-		}()
-	})
-}
+		// If StopOnError is enabled, create a cancellable context and forward
+		// internal errors to the outward channel before cancelling.
+		if w.config.StopOnError {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithCancel(ctx)
 
-// Start starts the Workers and begins executing tasks.
-// In case 'StopOnError' is set to true, tasks execution is stopped on error.
-func (w *workersStoppable[R]) Start(ctx context.Context) {
-	w.once.Do(func() {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithCancel(ctx)
-
-		if w.tasks == nil {
-			w.tasks = make(chan task[R])
-		}
-
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					w.tasks = nil
-					return
-
-				case t := <-w.tasks:
-					go w.dispatch(ctx, t)
-
-				case e := <-w.errorsBuf:
-					w.errors <- e
-
-					if w.config.StopOnError {
+			go func(ctx context.Context) {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case e := <-w.errorsBuf:
+						w.errors <- e
+						// cancel on first error when StopOnError is enabled
 						cancel()
 					}
 				}
+			}(ctx)
+		}
+
+		go func(ctx context.Context) {
+			for {
+				select {
+				case <-ctx.Done():
+					w.tasks = nil
+					return
+
+				case t := <-w.tasks:
+					go w.dispatch(ctx, t)
+				}
 			}
-		}()
+		}(ctx)
 	})
 }
 
