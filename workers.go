@@ -160,7 +160,9 @@ func (w *workers[R]) Start(ctx context.Context) {
 		}
 
 		// If StopOnError is enabled, create a cancellable context and forward
-		// internal errors to the outward channel before cancelling.
+		// internal errors to the outward channel. Cancel first to stop scheduling
+		// new work; then forward the triggering error. If the outward channel is
+		// full, forward in a detached goroutine to avoid blocking cancellation.
 		if w.config.StopOnError {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithCancel(ctx)
@@ -171,9 +173,15 @@ func (w *workers[R]) Start(ctx context.Context) {
 					case <-ctx.Done():
 						return
 					case e := <-w.errorsBuf:
-						w.errors <- e
-						// cancel on first error when StopOnError is enabled
+						// Cancel first so dispatch loop stops promptly.
 						cancel()
+						// Best-effort, non-blocking forward; if full, forward asynchronously.
+						select {
+						case w.errors <- e:
+							// forwarded
+						default:
+							go func(err error) { w.errors <- err }(e)
+						}
 					}
 				}
 			}(ctx)
