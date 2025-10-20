@@ -2,11 +2,8 @@ package workers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 )
-
-var ErrInvalidTaskType = errors.New("invalid task type")
 
 type task[R interface{}] interface {
 	execute(ctx context.Context) (R, error)
@@ -41,7 +38,7 @@ func execTask[R interface{}](ctx context.Context, call func() (R, error)) (R, er
 	go func() {
 		defer func() {
 			if ePanic := recover(); ePanic != nil {
-				err = fmt.Errorf("task execution panicked: %v", ePanic)
+				err = fmt.Errorf("%w: %v", ErrTaskPanicked, ePanic)
 			}
 			done <- struct{}{}
 		}()
@@ -51,7 +48,7 @@ func execTask[R interface{}](ctx context.Context, call func() (R, error)) (R, er
 
 	select {
 	case <-ctx.Done():
-		return *(new(R)), fmt.Errorf("task execution cancelled: %w", ctx.Err())
+		return *(new(R)), fmt.Errorf("%w: %w", ErrTaskCancelled, ctx.Err())
 	case <-done:
 		return result, err
 	}

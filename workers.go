@@ -2,45 +2,10 @@ package workers
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/ygrebnov/workers/pool"
 )
-
-// Config holds Workers configuration.
-type Config struct {
-	// MaxWorkers defines workers pool maximum size.
-	// Zero (default) means that the size will be set dynamically.
-	// Zero value is suitable for the majority of cases.
-	// Default: 0 (dynamic pool)
-	MaxWorkers uint
-
-	// StartImmediately defines whether workers start executing tasks immediately or not.
-	// Default: false
-	StartImmediately bool
-
-	// StopOnError stops tasks execution if an error occurs.
-	// Default: false
-	StopOnError bool
-
-	// TasksBufferSize defines the size of the tasks channel buffer.
-	// Default: 0 (unbuffered)
-	TasksBufferSize uint
-
-	// ResultsBufferSize defines the size of the results channel buffer.
-	// Default: 1024.
-	ResultsBufferSize uint
-
-	// ErrorsBufferSize defines the size of the outgoing errors channel buffer.
-	// Default: 1024.
-	ErrorsBufferSize uint
-
-	// StopOnErrorErrorsBufferSize defines the size of the internal errors buffer used
-	// when StopOnError is enabled. Smaller buffer triggers cancellation quickly.
-	// Default: 100.
-	StopOnErrorErrorsBufferSize uint
-}
 
 // Workers is an interface that defines methods on Workers.
 type Workers[R interface{}] interface {
@@ -201,10 +166,6 @@ func (w *workers[R]) Start(ctx context.Context) {
 		}(ctx)
 	})
 }
-
-var (
-	ErrInvalidState = errors.New("cannot add a task for non-started workers with unbuffered tasks channel")
-)
 
 // AddTask adds a task to the Workers queue.
 func (w *workers[R]) AddTask(t interface{}) error {
