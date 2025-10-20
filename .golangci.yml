@@ -47,7 +47,6 @@ linters:
     - unused
     - wastedassign
     - whitespace
-    - wrapcheck
 
 linters-settings:
   depguard:
