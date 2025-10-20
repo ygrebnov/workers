@@ -23,10 +23,57 @@ Designed to be **simple and easy to use**, it allows executing tasks concurrentl
 
 ## Installation
 
-Requires Go 1.22.3 or later:
+Requires Go 1.22 or later:
 
 ```shell
 go get github.com/ygrebnov/workers
+```
+
+## Constructors
+
+- NewOptions(ctx, opts ...Option): preferred constructor using functional options.
+- New(ctx, *Config): current stable constructor; planned for deprecation in a future major version.
+
+## Defaults
+
+Unless overridden, a new instance uses:
+
+- MaxWorkers: 0 (dynamic pool)
+- StartImmediately: false (call Start() if TasksBufferSize == 0)
+- StopOnError: false
+- TasksBufferSize: 0
+- ResultsBufferSize: 1024
+- ErrorsBufferSize: 1024
+- StopOnErrorErrorsBufferSize: 100
+
+## Options vs Config
+
+Options-based (recommended):
+
+```go
+w := workers.NewOptions[string](
+    context.Background(),
+    workers.WithDynamicPool(),
+    workers.WithStartImmediately(),
+    workers.WithTasksBuffer(16),
+    workers.WithResultsBuffer(2048),
+    workers.WithErrorsBuffer(2048),
+)
+```
+
+Equivalent with Config:
+
+```go
+w := workers.New[string](
+    context.Background(),
+    &workers.Config{
+        // dynamic pool (MaxWorkers=0)
+        StartImmediately:  true,
+        TasksBufferSize:   16,
+        ResultsBufferSize: 2048,
+        ErrorsBufferSize:  2048,
+    },
+)
 ```
 
 ## Usage example
@@ -104,6 +151,84 @@ Calculated Fibonacci for: 18, result: 2584.
 Calculated Fibonacci for: 19, result: 4181.
 ...
 Calculated Fibonacci for: 11, result: 89.
+```
+
+## Choosing between dynamic and fixed-size pool
+### When a dynamic-size pool is a better fit
+- Bursty or unpredictable workloads: dynamic grows parallelism during spikes to keep latency down, then shrinks afterward.
+- Mostly I/O-bound tasks: network/disk/DB/RPC where goroutines mostly wait; higher concurrency often improves throughput.
+- Heterogeneous task durations: mix of long and short tasks; dynamic can add workers so short tasks aren’t delayed by long ones.
+- Many small, lightweight tasks: avoids careful capacity tuning; per-worker overhead is low.
+- Unknown ideal concurrency: start dynamic, measure, then tune if needed.
+  Caveats with dynamic
+- Resource safety: dynamic here is effectively unbounded. Add an explicit semaphore/rate limiter when calling bounded backends (DB/APIs).
+- CPU-heavy tasks: unbounded concurrency can oversubscribe CPUs; prefer a fixed pool near runtime.NumCPU.
+- Expensive per-worker state: sync.Pool may drop items on GC; if workers hold costly state, a capped fixed pool is more predictable for reuse.
+
+### When a fixed-size pool is preferable
+- CPU-bound or compute-heavy work: bound concurrency to ~runtime.NumCPU for best throughput and lower contention.
+- Hard external limits: DB connection pools, API rate limits, or other bounded systems; fixed provides predictable backpressure.
+- Need strict cap/predictable SLAs: fixed gives a hard limit on concurrent work and a clear queue story.
+- Long-lived or expensive per-worker state: retain and reuse initialized workers reliably.
+  Quick decision matrix
+- I/O-bound and don’t know concurrency yet: dynamic-size pool (default). Add a limiter if you talk to bounded backends.
+- CPU-bound math/heavy memory compute: fixed-size pool with MaxWorkers ≈ runtime.NumCPU().
+- Bursty workload where latency during peaks matters: dynamic-size pool.
+- Integrating with a bounded backend (DB/API): fixed-size pool sized to backend limits (or dynamic + explicit semaphore with the same cap).
+  
+### Snippets
+
+Dynamic + explicit limiter for I/O-bound tasks
+```go
+package main
+
+import (
+    "context"
+    "github.com/ygrebnov/workers"
+)
+
+func main() {
+    ctx := context.Background()
+    // Limit calls to an external backend to at most 50 in flight.
+    sem := make(chan struct{}, 50)
+    w := workers.NewOptions[error](
+        ctx,
+        workers.WithDynamicPool(),
+        workers.WithStartImmediately(),
+    )
+    _ = w.AddTask(func(ctx context.Context) error {
+        sem <- struct{}{}            // acquire
+        defer func() { <-sem }()     // release
+        // Do I/O-bound work (HTTP/DB/etc.).
+        return nil
+    })
+}
+```
+
+Fixed-size pool for CPU-bound tasks
+```go
+package main
+
+import (
+    "context"
+    "runtime"
+	
+    "github.com/ygrebnov/workers"
+)
+
+func cpuHeavy(n int) int { /* compute */ return n }
+func main() {
+    ctx := context.Background()
+    n := uint(runtime.NumCPU())
+    w := workers.NewOptions[int](
+        ctx,
+        workers.WithFixedPool(n),
+        workers.WithStartImmediately(),
+    )
+    _ = w.AddTask(func(ctx context.Context) int {
+        return cpuHeavy(42)
+    })
+}
 ```
 
 ## Contributing

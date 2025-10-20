@@ -21,7 +21,6 @@ linters:
     - goconst
     - gocritic
     - gocyclo
-    - godot
     - gofmt
     - goimports
     - gomoddirectives
@@ -78,8 +77,6 @@ linters-settings:
       - opinionated
   gocyclo:
     min-complexity: 10
-  godot:
-    capital: true
   goimports:
     local-prefixes: github.com/ygrebnov/workers
   gosec:
@@ -92,6 +89,7 @@ issues:
   exclude-dirs:
     - vendor
   exclude-rules:
+    # Relax checks for standard _test.go files across the repo.
     - path: _test.go
       linters:
         - dogsled
@@ -102,3 +100,18 @@ issues:
         - funlen
         - govet
         - lll
+        - staticcheck
+        - revive
+    # Relax checks for helper code living under tests/ (some files don’t end with _test.go).
+    - path: ^tests/
+      linters:
+        - dogsled
+        - dupl
+        - gocyclo
+        - gosec
+        - gosimple
+        - funlen
+        - govet
+        - lll
+        - staticcheck
+        - revive

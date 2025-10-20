@@ -3,3 +3,5 @@ vendor
 .idea
 .coverage
 .profiling
+/improvements/
+/tools/bin/
