@@ -8,7 +8,8 @@
 //     become the primary New in the next major version. Prefer this in new code.
 //
 // Zero value and lifecycle
-//   - The zero value of Workers is not ready for use. Always construct via New or NewOptions.
+//   - The zero value of Workers is usable after calling Start(ctx); it initializes with defaults.
+//     For custom configuration, construct via New or NewOptions.
 //   - Start(ctx) is safe to call at most once; concurrent calls are idempotent.
 //   - Close() is provided to stop scheduling, wait for in-flight work to finish, and close
 //     the results and errors channels. Close is idempotent and safe for concurrent use.

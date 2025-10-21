@@ -8,8 +8,8 @@ import (
 )
 
 // Workers manages a pool of workers executing typed tasks and exposing results/errors channels.
-// Breaking change: Workers is now a concrete struct (not an interface). Methods are safe for concurrent use.
-// The zero value is not ready for use; construct via New or NewOptions.
+// Workers is a concrete struct; methods are safe for concurrent use.
+// Zero-value is usable: call Start(ctx) to initialize with defaults (or construct via New/NewOptions).
 //
 //nolint:revive // generic constraint uses interface{} for compatibility.
 type Workers[R interface{}] struct {
@@ -128,6 +128,47 @@ func New[R interface{}](ctx context.Context, config *Config) *Workers[R] {
 // Start starts the Workers and begins executing tasks.
 func (w *Workers[R]) Start(ctx context.Context) {
 	w.once.Do(func() {
+		// If this instance was not constructed via New/NewOptions, lazily initialize defaults.
+		if w.config == nil {
+			cfg := defaultConfig()
+			w.config = &cfg
+		}
+
+		// Initialize results and errors channels if missing.
+		if w.results == nil {
+			w.results = make(chan R, w.config.ResultsBufferSize)
+		}
+
+		// For StopOnError, workers write to an internal buffer that is forwarded outward.
+		// Otherwise, workers write directly to the outward errors channel.
+		if w.config.StopOnError {
+			if w.errorsBuf == nil {
+				w.errorsBuf = make(chan error, w.config.StopOnErrorErrorsBufferSize)
+			}
+			if w.errors == nil {
+				w.errors = make(chan error, w.config.ErrorsBufferSize)
+			}
+		} else {
+			if w.errors == nil {
+				w.errors = make(chan error, w.config.ErrorsBufferSize)
+			}
+		}
+
+		// Initialize pool if missing.
+		if w.pool == nil {
+			// Workers should write errors to errorsBuf if StopOnError, else directly to outward errors.
+			workerErrors := w.errors
+			if w.config.StopOnError {
+				workerErrors = w.errorsBuf
+			}
+			newWorkerFn := func() interface{} { return newWorker(w.results, workerErrors) }
+			if w.config.MaxWorkers > 0 {
+				w.pool = pool.NewFixed(w.config.MaxWorkers, newWorkerFn)
+			} else {
+				w.pool = pool.NewDynamic(newWorkerFn)
+			}
+		}
+
 		// create internal context that Close() can cancel
 		w.ctx, w.cancel = context.WithCancel(ctx)
 
