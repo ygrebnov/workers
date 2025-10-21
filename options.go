@@ -90,9 +90,9 @@ func WithStopOnError() Option {
 }
 
 // NewOptions creates a new Workers instance using functional options.
-// Breaking change: returns (Workers, error) instead of panicking on invalid options.
+// Breaking change: returns (*Workers, error) instead of panicking on invalid options.
 // It preserves backward compatibility in behavior by internally constructing a Config and delegating to New.
-func NewOptions[R interface{}](ctx context.Context, opts ...Option) (Workers[R], error) {
+func NewOptions[R interface{}](ctx context.Context, opts ...Option) (*Workers[R], error) {
 	co := configOptions{cfg: defaultConfig(), poolSelected: poolUnspecified}
 	for _, opt := range opts {
 		if opt == nil {

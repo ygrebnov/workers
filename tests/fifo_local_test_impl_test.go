@@ -8,7 +8,7 @@ import (
 )
 
 // fifoWorkers is a simple FIFO executor that runs tasks sequentially in submission order.
-// It implements the Workers interface without using any pool; a single goroutine executes tasks one by one.
+// It mirrors the Workers API semantics without using any pool; a single goroutine executes tasks one by one.
 // It honors Config.StartImmediately, Config.TasksBufferSize, and Config.StopOnError.
 // Results and errors are delivered via the same channel semantics as regular workers.New.
 //
@@ -25,7 +25,7 @@ type fifoWorkers[R any] struct {
 }
 
 // newFIFO creates a new private FIFO executor used only in tests/benchmarks.
-func newFIFO[R any](ctx context.Context, config *workers.Config) workers.Workers[R] {
+func newFIFO[R any](ctx context.Context, config *workers.Config) testWorkers[R] {
 	if config == nil {
 		config = &workers.Config{}
 	}

@@ -60,7 +60,7 @@ func memHeavyTask(size int) func(context.Context) float64 {
 	}
 }
 
-func runBench[R any](b *testing.B, tasks []workers.Task[R], mk func() workers.Workers[R]) {
+func runBench[R any](b *testing.B, tasks []workers.Task[R], mk func() testWorkers[R]) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		w := mk()
@@ -105,25 +105,25 @@ func BenchmarkFIFO_vs_Pools_Matrix256_64Tasks(b *testing.B) {
 	ctx := context.Background()
 
 	b.Run("fifo", func(b *testing.B) {
-		runBench[float64](b, tasks, func() workers.Workers[float64] {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
 			return newFIFO[float64](ctx, &workers.Config{StartImmediately: true})
 		})
 	})
 
 	b.Run("fixed_NCPU", func(b *testing.B) {
-		runBench[float64](b, tasks, func() workers.Workers[float64] {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
 			return workers.New[float64](ctx, &workers.Config{MaxWorkers: uint(runtime.NumCPU()), StartImmediately: true})
 		})
 	})
 
 	b.Run("dynamic", func(b *testing.B) {
-		runBench[float64](b, tasks, func() workers.Workers[float64] {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
 			return workers.New[float64](ctx, &workers.Config{StartImmediately: true})
 		})
 	})
 
 	b.Run("mt_NCPU", func(b *testing.B) {
-		runBench[float64](b, tasks, func() workers.Workers[float64] {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
 			return newMT[float64](ctx, &workers.Config{MaxWorkers: uint(runtime.NumCPU()), StartImmediately: true})
 		})
 	})
@@ -141,25 +141,25 @@ func BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks(b *testing.B) {
 	ctx := context.Background()
 
 	b.Run("fifo", func(b *testing.B) {
-		runBench[float64](b, tasks, func() workers.Workers[float64] {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
 			return newFIFO[float64](ctx, &workers.Config{StartImmediately: true})
 		})
 	})
 
 	b.Run("fixed_NCPU", func(b *testing.B) {
-		runBench[float64](b, tasks, func() workers.Workers[float64] {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
 			return workers.New[float64](ctx, &workers.Config{MaxWorkers: uint(runtime.NumCPU()), StartImmediately: true})
 		})
 	})
 
 	b.Run("dynamic", func(b *testing.B) {
-		runBench[float64](b, tasks, func() workers.Workers[float64] {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
 			return workers.New[float64](ctx, &workers.Config{StartImmediately: true})
 		})
 	})
 
 	b.Run("mt_NCPU", func(b *testing.B) {
-		runBench[float64](b, tasks, func() workers.Workers[float64] {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
 			return newMT[float64](ctx, &workers.Config{MaxWorkers: uint(runtime.NumCPU()), StartImmediately: true})
 		})
 	})

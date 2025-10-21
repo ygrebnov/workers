@@ -7,28 +7,10 @@ import (
 	"github.com/ygrebnov/workers/pool"
 )
 
-// Workers is an interface that defines methods on Workers.
-// Breaking change: AddTask is now strongly typed and accepts Task[R].
-type Workers[R interface{}] interface {
-	// Start starts the Workers and begins executing tasks.
-	// Start may be called only once.
-	// In case 'StopOnError' is set to true, tasks execution is stopped on error.
-	Start(context.Context)
-
-	// AddTask adds a task to the Workers queue.
-	// The task must be constructed via TaskFunc/TaskValue/TaskError.
-	// In case the Workers have been started, the task will be dispatched immediately and
-	// executed as soon as a worker is available.
-	AddTask(Task[R]) error
-
-	// GetResults returns a channel to receive tasks execution results.
-	GetResults() chan R
-
-	// GetErrors returns a channel to receive tasks execution errors.
-	GetErrors() chan error
-}
-
-type workers[R interface{}] struct {
+// Workers manages a pool of workers executing typed tasks and exposing results/errors channels.
+// Breaking change: Workers is now a concrete struct (not an interface). Methods are safe for concurrent use.
+// The zero value is not ready for use; construct via New or NewOptions.
+type Workers[R interface{}] struct {
 	config *Config
 
 	once sync.Once
@@ -52,7 +34,7 @@ type workers[R interface{}] struct {
 // The Workers object is not started automatically.
 // To start it, either 'StartImmediately' configuration option must be set to true or
 // the Start method must be called explicitly.
-func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
+func New[R interface{}](ctx context.Context, config *Config) *Workers[R] {
 	if config == nil {
 		cfg := defaultConfig()
 		config = &cfg
@@ -88,7 +70,7 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 		tasks = nil // to return error in AddTask.
 	}
 
-	w := &workers[R]{
+	w := &Workers[R]{
 		config:  config,
 		tasks:   tasks,
 		results: r,
@@ -112,7 +94,7 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 }
 
 // Start starts the Workers and begins executing tasks.
-func (w *workers[R]) Start(ctx context.Context) {
+func (w *Workers[R]) Start(ctx context.Context) {
 	w.once.Do(func() {
 		if w.tasks == nil {
 			w.tasks = make(chan Task[R])
@@ -162,7 +144,7 @@ func (w *workers[R]) Start(ctx context.Context) {
 }
 
 // AddTask adds a task to the Workers queue.
-func (w *workers[R]) AddTask(t Task[R]) error {
+func (w *Workers[R]) AddTask(t Task[R]) error {
 	switch {
 	case w.tasks == nil:
 		return ErrInvalidState
@@ -176,16 +158,12 @@ func (w *workers[R]) AddTask(t Task[R]) error {
 }
 
 // GetResults returns a channel to receive tasks execution results.
-func (w *workers[R]) GetResults() chan R {
-	return w.results
-}
+func (w *Workers[R]) GetResults() chan R { return w.results }
 
 // GetErrors returns a channel to receive tasks execution errors.
-func (w *workers[R]) GetErrors() chan error {
-	return w.errors
-}
+func (w *Workers[R]) GetErrors() chan error { return w.errors }
 
-func (w *workers[R]) dispatch(ctx context.Context, t Task[R]) {
+func (w *Workers[R]) dispatch(ctx context.Context, t Task[R]) {
 	ww := w.pool.Get().(*worker[R])
 	ww.execute(ctx, t)
 	w.pool.Put(ww)

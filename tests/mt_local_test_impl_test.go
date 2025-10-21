@@ -20,7 +20,7 @@ type concurrentWorkers[R any] struct {
 
 // newMT creates a new private multithreaded executor that does not preserve order.
 // Concurrency is config.MaxWorkers; if zero, defaults to runtime.NumCPU().
-func newMT[R any](ctx context.Context, config *workers.Config) workers.Workers[R] {
+func newMT[R any](ctx context.Context, config *workers.Config) testWorkers[R] {
 	if config == nil {
 		config = &workers.Config{}
 	}
