@@ -10,13 +10,26 @@ import (
 // Workers manages a pool of workers executing typed tasks and exposing results/errors channels.
 // Breaking change: Workers is now a concrete struct (not an interface). Methods are safe for concurrent use.
 // The zero value is not ready for use; construct via New or NewOptions.
+//
+//nolint:revive // generic constraint uses interface{} for compatibility.
 type Workers[R interface{}] struct {
+	// noCopy prevents accidental copying of the controller.
+	//go:nocopy
+	nc noCopy
+
 	config *Config
 
-	once sync.Once
+	once      sync.Once
+	closeOnce sync.Once
 
+	// internal lifecycle control
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	// worker pool
 	pool pool.Pool
 
+	// channels
 	tasks   chan Task[R]
 	results chan R
 	errors  chan error // outward errors channel
@@ -24,7 +37,20 @@ type Workers[R interface{}] struct {
 	// When StopOnError is enabled, workers produce into this smaller internal buffer,
 	// which Start() drains and forwards into the outward errors channel, then cancels.
 	errorsBuf chan error
+
+	// in-flight tasks accounting (dispatch wrappers increment/decrement)
+	inflight sync.WaitGroup
+
+	// waits for the stop-on-error forwarder goroutine to exit before closing errors
+	forwarderWG sync.WaitGroup
 }
+
+// noCopy is a vet-recognized marker to discourage copying types with this field embedded.
+// It works with the "-copylocks" analyzer via the presence of Lock/Unlock methods.
+type noCopy struct{}
+
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}
 
 // New creates a new Workers object instance and returns it.
 //
@@ -96,36 +122,35 @@ func New[R interface{}](ctx context.Context, config *Config) *Workers[R] {
 // Start starts the Workers and begins executing tasks.
 func (w *Workers[R]) Start(ctx context.Context) {
 	w.once.Do(func() {
+		// create internal context that Close() can cancel
+		w.ctx, w.cancel = context.WithCancel(ctx)
+
 		if w.tasks == nil {
 			w.tasks = make(chan Task[R])
 		}
 
-		// If StopOnError is enabled, create a cancellable context and forward
-		// internal errors to the outward channel. Cancel first to stop scheduling
-		// new work; then forward the triggering error. If the outward channel is
-		// full, forward in a detached goroutine to avoid blocking cancellation.
+		// If StopOnError is enabled, forward internal errors to the outward channel.
 		if w.config.StopOnError {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithCancel(ctx)
-
+			w.forwarderWG.Add(1)
 			go func(ctx context.Context) {
+				defer w.forwarderWG.Done()
 				for {
 					select {
 					case <-ctx.Done():
 						return
 					case e := <-w.errorsBuf:
 						// Cancel first so dispatch loop stops promptly.
-						cancel()
-						// Best-effort, non-blocking forward; if full, forward asynchronously.
+						w.cancel()
+						// Best-effort, non-blocking forward; drop if outward is saturated.
 						select {
 						case w.errors <- e:
 							// forwarded
 						default:
-							go func(err error) { w.errors <- err }(e)
+							// drop to avoid blocking or leaking goroutines
 						}
 					}
 				}
-			}(ctx)
+			}(w.ctx)
 		}
 
 		go func(ctx context.Context) {
@@ -136,10 +161,60 @@ func (w *Workers[R]) Start(ctx context.Context) {
 					return
 
 				case t := <-w.tasks:
-					go w.dispatch(ctx, t)
+					w.inflight.Add(1)
+					go func(tt Task[R]) {
+						defer w.inflight.Done()
+						w.dispatch(ctx, tt)
+					}(t)
 				}
 			}
-		}(ctx)
+		}(w.ctx)
+	})
+}
+
+// Close stops scheduling new work, waits for in-flight tasks to finish, then closes results and errors.
+//
+// Semantics:
+// - Idempotent and safe for concurrent use.
+// - Cancels the internal context created at Start, causing the dispatcher to stop.
+// - Waits for all in-flight task executions to complete.
+// - In StopOnError mode, drains any buffered internal errors and forwards them best-effort before closing.
+// - Finally closes results and errors channels owned by this instance.
+func (w *Workers[R]) Close() {
+	w.closeOnce.Do(func() {
+		// prevent further AddTask attempts from succeeding
+		w.tasks = nil
+
+		// cancel internal context to stop dispatch and forwarder
+		if w.cancel != nil {
+			w.cancel()
+		}
+
+		// wait for in-flight tasks to finish
+		w.inflight.Wait()
+
+		// ensure forwarder stopped before closing outward errors
+		w.forwarderWG.Wait()
+
+		// drain any remaining internal errors best-effort
+		if w.errorsBuf != nil {
+			for {
+				select {
+				case e := <-w.errorsBuf:
+					select {
+					case w.errors <- e:
+						// forwarded
+					default:
+						// drop to avoid blocking or leaking goroutines
+					}
+				default:
+					goto drained
+				}
+			}
+		}
+	drained:
+		close(w.results)
+		close(w.errors)
 	})
 }
 
