@@ -35,7 +35,7 @@ func TestStopOnError_CancelFirst_OutwardErrorsSaturated(t *testing.T) {
 	}
 
 	// Triggering task: returns error immediately.
-	if err := w.AddTask(func(ctx context.Context) error { return errors.New("boom") }); err != nil {
+	if err := w.AddTask(workers.TaskError[int](func(ctx context.Context) error { return errors.New("boom") })); err != nil {
 		t.Fatalf("unexpected AddTask error for trigger task: %v", err)
 	}
 
@@ -44,10 +44,10 @@ func TestStopOnError_CancelFirst_OutwardErrorsSaturated(t *testing.T) {
 
 	// Attempt to enqueue a second task that would signal if started.
 	started := make(chan struct{}, 1)
-	err = w.AddTask(func(ctx context.Context) error {
+	err = w.AddTask(workers.TaskError[int](func(ctx context.Context) error {
 		started <- struct{}{}
 		return nil
-	})
+	}))
 
 	// Two acceptable outcomes:
 	// - ErrInvalidState: cancellation already took effect and tasks channel is disabled.
@@ -97,17 +97,17 @@ func TestStopOnError_CancelFirst_BufferedOutward_NoDeadlock(t *testing.T) {
 		t.Fatalf("failed to create workers via options: %v", err)
 	}
 
-	if err := w.AddTask(func(ctx context.Context) error { return errors.New("boom") }); err != nil {
+	if err := w.AddTask(workers.TaskError[int](func(ctx context.Context) error { return errors.New("boom") })); err != nil {
 		t.Fatalf("unexpected AddTask error for trigger task: %v", err)
 	}
 
 	time.Sleep(50 * time.Millisecond)
 
 	started := make(chan struct{}, 1)
-	err = w.AddTask(func(ctx context.Context) error {
+	err = w.AddTask(workers.TaskError[int](func(ctx context.Context) error {
 		started <- struct{}{}
 		return nil
-	})
+	}))
 
 	if err != nil {
 		if !errors.Is(err, workers.ErrInvalidState) {
@@ -159,7 +159,7 @@ func TestOutwardErrors_BufferedOverflow_NoStopOnError(t *testing.T) {
 
 	// Enqueue more tasks than the outward errors buffer size; each returns an error immediately.
 	for i := 0; i < tasksCount; i++ {
-		if err := w.AddTask(func(ctx context.Context) error { return errors.New("boom") }); err != nil {
+		if err := w.AddTask(workers.TaskError[int](func(ctx context.Context) error { return errors.New("boom") })); err != nil {
 			t.Fatalf("unexpected AddTask error at %d: %v", i, err)
 		}
 	}

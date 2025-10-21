@@ -8,6 +8,7 @@ import (
 )
 
 // Workers is an interface that defines methods on Workers.
+// Breaking change: AddTask is now strongly typed and accepts Task[R].
 type Workers[R interface{}] interface {
 	// Start starts the Workers and begins executing tasks.
 	// Start may be called only once.
@@ -15,17 +16,10 @@ type Workers[R interface{}] interface {
 	Start(context.Context)
 
 	// AddTask adds a task to the Workers queue.
-	// The task must be a function with one of the following signatures:
-	//
-	// * func(context.Context) (R, error),
-	//
-	// * func(context.Context) R,
-	//
-	// * func(context.Context) error.
-	//
+	// The task must be constructed via TaskFunc/TaskValue/TaskError.
 	// In case the Workers have been started, the task will be dispatched immediately and
 	// executed as soon as a worker is available.
-	AddTask(interface{}) error
+	AddTask(Task[R]) error
 
 	// GetResults returns a channel to receive tasks execution results.
 	GetResults() chan R
@@ -41,7 +35,7 @@ type workers[R interface{}] struct {
 
 	pool pool.Pool
 
-	tasks   chan task[R]
+	tasks   chan Task[R]
 	results chan R
 	errors  chan error // outward errors channel
 
@@ -89,7 +83,7 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 		p = pool.NewDynamic(newWorkerFn)
 	}
 
-	tasks := make(chan task[R], config.TasksBufferSize)
+	tasks := make(chan Task[R], config.TasksBufferSize)
 	if config.TasksBufferSize == 0 {
 		tasks = nil // to return error in AddTask.
 	}
@@ -121,7 +115,7 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 func (w *workers[R]) Start(ctx context.Context) {
 	w.once.Do(func() {
 		if w.tasks == nil {
-			w.tasks = make(chan task[R])
+			w.tasks = make(chan Task[R])
 		}
 
 		// If StopOnError is enabled, create a cancellable context and forward
@@ -168,12 +162,7 @@ func (w *workers[R]) Start(ctx context.Context) {
 }
 
 // AddTask adds a task to the Workers queue.
-func (w *workers[R]) AddTask(t interface{}) error {
-	tt, err := newTask[R](t)
-	if err != nil {
-		return err
-	}
-
+func (w *workers[R]) AddTask(t Task[R]) error {
 	switch {
 	case w.tasks == nil:
 		return ErrInvalidState
@@ -182,7 +171,7 @@ func (w *workers[R]) AddTask(t interface{}) error {
 		panic("tasks channel is full")
 	}
 
-	w.tasks <- tt
+	w.tasks <- t
 	return nil
 }
 
@@ -196,7 +185,7 @@ func (w *workers[R]) GetErrors() chan error {
 	return w.errors
 }
 
-func (w *workers[R]) dispatch(ctx context.Context, t task[R]) {
+func (w *workers[R]) dispatch(ctx context.Context, t Task[R]) {
 	ww := w.pool.Get().(*worker[R])
 	ww.execute(ctx, t)
 	w.pool.Put(ww)

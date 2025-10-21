@@ -8,11 +8,10 @@ import (
 	"time"
 )
 
-func TestNewTask_FactoryAndBasicExecution(t *testing.T) {
+func TestTaskAdapters_BasicExecution(t *testing.T) {
 	type testCase struct {
 		name      string
-		newFn     any
-		expectOk  bool
+		mk        func() Task[int]
 		expectR   int
 		expectErr error
 	}
@@ -21,72 +20,42 @@ func TestNewTask_FactoryAndBasicExecution(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name: "func(ctx)(R,error) -> success",
-			newFn: func(_ context.Context) (int, error) {
-				return 7, nil
-			},
-			expectOk:  true,
+			name:      "TaskFunc -> success",
+			mk:        func() Task[int] { return TaskFunc[int](func(_ context.Context) (int, error) { return 7, nil }) },
 			expectR:   7,
 			expectErr: okErr,
 		},
 		{
-			name: "func(ctx)R -> success",
-			newFn: func(_ context.Context) int {
-				return 5
-			},
-			expectOk:  true,
+			name:      "TaskValue -> success",
+			mk:        func() Task[int] { return TaskValue[int](func(_ context.Context) int { return 5 }) },
 			expectR:   5,
 			expectErr: okErr,
 		},
 		{
-			name: "func(ctx)error -> success (nil) returns zero R and nil",
-			newFn: func(_ context.Context) error {
-				return nil
-			},
-			expectOk:  true,
+			name:      "TaskError -> success (nil) returns zero R and nil",
+			mk:        func() Task[int] { return TaskError[int](func(_ context.Context) error { return nil }) },
 			expectR:   0,
 			expectErr: okErr,
-		},
-		{
-			name:      "invalid type -> ErrInvalidTaskType",
-			newFn:     123, // not a supported signature
-			expectOk:  false,
-			expectR:   0,
-			expectErr: ErrInvalidTaskType,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task, err := newTask[int](tt.newFn)
-			if tt.expectErr != nil {
-				if !errors.Is(err, tt.expectErr) {
-					t.Fatalf("newTask error = %v, want %v", err, tt.expectErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected newTask error: %v", err)
-			}
-			if !tt.expectOk {
-				t.Fatalf("expected construction to fail, but it succeeded")
-			}
-
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
-			got, execErr := task.execute(ctx)
+			got, execErr := tt.mk().Run(ctx)
 			if execErr != tt.expectErr {
-				t.Fatalf("execute error = %v, want %v", execErr, tt.expectErr)
+				t.Fatalf("Run error = %v, want %v", execErr, tt.expectErr)
 			}
 			if got != tt.expectR {
-				t.Fatalf("execute result = %v, want %v", got, tt.expectR)
+				t.Fatalf("Run result = %v, want %v", got, tt.expectR)
 			}
 		})
 	}
 }
 
-func TestTaskResultError_Execute_AllBranches(t *testing.T) {
+func TestTaskFunc_Run_AllBranches(t *testing.T) {
 	type testCase struct {
 		name      string
 		fn        func(context.Context) (int, error)
@@ -99,33 +68,26 @@ func TestTaskResultError_Execute_AllBranches(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name: "success result + nil error",
-			fn: func(_ context.Context) (int, error) {
-				return 10, nil
-			},
+			name:      "success result + nil error",
+			fn:        func(_ context.Context) (int, error) { return 10, nil },
 			expectR:   10,
 			expectErr: func(err error) bool { return err == nil },
 		},
 		{
-			name: "returned error",
-			fn: func(_ context.Context) (int, error) {
-				return 0, errors.New("boom")
-			},
+			name:      "returned error",
+			fn:        func(_ context.Context) (int, error) { return 0, errors.New("boom") },
 			expectR:   0,
 			expectErr: func(err error) bool { return err != nil && strings.Contains(err.Error(), "boom") },
 		},
 		{
-			name: "panic is recovered",
-			fn: func(_ context.Context) (int, error) {
-				panic("kaboom")
-			},
+			name:      "panic is recovered",
+			fn:        func(_ context.Context) (int, error) { panic("kaboom") },
 			expectR:   0,
 			expectErr: func(err error) bool { return err != nil && strings.Contains(err.Error(), "panicked") },
 		},
 		{
 			name: "context cancellation wins",
 			fn: func(ctx context.Context) (int, error) {
-				// Block until the test cancels ctx, then until blocker closes to avoid leaks.
 				select {
 				case <-ctx.Done():
 					<-blocker
@@ -139,11 +101,6 @@ func TestTaskResultError_Execute_AllBranches(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task, err := newTask[int](tt.fn)
-			if err != nil {
-				t.Fatalf("newTask error: %v", err)
-			}
-
 			var ctx context.Context
 			var cancel context.CancelFunc
 			if strings.Contains(tt.name, "cancellation") {
@@ -154,7 +111,7 @@ func TestTaskResultError_Execute_AllBranches(t *testing.T) {
 			}
 			defer cancel()
 
-			got, execErr := task.execute(ctx)
+			got, execErr := TaskFunc[int](tt.fn).Run(ctx)
 			if got != tt.expectR {
 				t.Fatalf("result = %v, want %v", got, tt.expectR)
 			}
@@ -165,7 +122,7 @@ func TestTaskResultError_Execute_AllBranches(t *testing.T) {
 	}
 }
 
-func TestTaskResult_Execute_AllBranches(t *testing.T) {
+func TestTaskValue_Run_AllBranches(t *testing.T) {
 	type testCase struct {
 		name      string
 		fn        func(context.Context) int
@@ -178,18 +135,14 @@ func TestTaskResult_Execute_AllBranches(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name: "success result",
-			fn: func(_ context.Context) int {
-				return 21
-			},
+			name:      "success result",
+			fn:        func(_ context.Context) int { return 21 },
 			expectR:   21,
 			expectErr: func(err error) bool { return err == nil },
 		},
 		{
-			name: "panic is recovered",
-			fn: func(_ context.Context) int {
-				panic("oops")
-			},
+			name:      "panic is recovered",
+			fn:        func(_ context.Context) int { panic("oops") },
 			expectR:   0,
 			expectErr: func(err error) bool { return err != nil && strings.Contains(err.Error(), "panicked") },
 		},
@@ -209,11 +162,6 @@ func TestTaskResult_Execute_AllBranches(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task, err := newTask[int](tt.fn)
-			if err != nil {
-				t.Fatalf("newTask error: %v", err)
-			}
-
 			var ctx context.Context
 			var cancel context.CancelFunc
 			if strings.Contains(tt.name, "cancellation") {
@@ -224,7 +172,7 @@ func TestTaskResult_Execute_AllBranches(t *testing.T) {
 			}
 			defer cancel()
 
-			got, execErr := task.execute(ctx)
+			got, execErr := TaskValue[int](tt.fn).Run(ctx)
 			if got != tt.expectR {
 				t.Fatalf("result = %v, want %v", got, tt.expectR)
 			}
@@ -235,7 +183,7 @@ func TestTaskResult_Execute_AllBranches(t *testing.T) {
 	}
 }
 
-func TestTaskError_Execute_AllBranches(t *testing.T) {
+func TestTaskError_Run_AllBranches(t *testing.T) {
 	type testCase struct {
 		name      string
 		fn        func(context.Context) error
@@ -248,26 +196,20 @@ func TestTaskError_Execute_AllBranches(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name: "success nil error",
-			fn: func(_ context.Context) error {
-				return nil
-			},
+			name:      "success nil error",
+			fn:        func(_ context.Context) error { return nil },
 			expectR:   0,
 			expectErr: func(err error) bool { return err == nil },
 		},
 		{
-			name: "returned error",
-			fn: func(_ context.Context) error {
-				return errors.New("sad")
-			},
+			name:      "returned error",
+			fn:        func(_ context.Context) error { return errors.New("sad") },
 			expectR:   0,
 			expectErr: func(err error) bool { return err != nil && strings.Contains(err.Error(), "sad") },
 		},
 		{
-			name: "panic is recovered",
-			fn: func(_ context.Context) error {
-				panic("boom")
-			},
+			name:      "panic is recovered",
+			fn:        func(_ context.Context) error { panic("boom") },
 			expectR:   0,
 			expectErr: func(err error) bool { return err != nil && strings.Contains(err.Error(), "panicked") },
 		},
@@ -287,11 +229,6 @@ func TestTaskError_Execute_AllBranches(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task, err := newTask[int](tt.fn)
-			if err != nil {
-				t.Fatalf("newTask error: %v", err)
-			}
-
 			var ctx context.Context
 			var cancel context.CancelFunc
 			if strings.Contains(tt.name, "cancellation") {
@@ -302,7 +239,7 @@ func TestTaskError_Execute_AllBranches(t *testing.T) {
 			}
 			defer cancel()
 
-			got, execErr := task.execute(ctx)
+			got, execErr := TaskError[int](tt.fn).Run(ctx)
 			if got != tt.expectR {
 				t.Fatalf("result = %v, want %v", got, tt.expectR)
 			}

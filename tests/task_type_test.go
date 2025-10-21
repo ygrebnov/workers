@@ -12,40 +12,12 @@ import (
 func TestTaskTypeString(t *testing.T) {
 	c := workers.New[string](context.Background(), &workers.Config{TasksBufferSize: 5})
 
-	err := c.AddTask(func(context.Context) (string, error) {
-		return "", nil
-	})
-	require.NoError(t, err, "Failed to add (string, error) task to workers")
-
-	err = c.AddTask(func(context.Context) string {
-		return ""
-	})
-	require.NoError(t, err, "Failed to add (string) task to workers")
-
-	err = c.AddTask(func(context.Context) error {
-		return nil
-	})
-	require.NoError(t, err, "Failed to add (error) task to workers")
-
-	err = c.AddTask(func(context.Context) int {
-		return 42
-	})
-	require.ErrorIs(
-		t,
-		err,
-		workers.ErrInvalidTaskType,
-		"Expected invalid task type error when adding (int) task to workers",
-	)
-
-	err = c.AddTask(func(context.Context) *string {
-		return nil
-	})
-	require.ErrorIs(
-		t,
-		err,
-		workers.ErrInvalidTaskType,
-		"Expected invalid task type error when adding (*string) task to workers",
-	)
+	// Valid (string, error)
+	require.NoError(t, c.AddTask(workers.TaskFunc[string](func(context.Context) (string, error) { return "", nil })))
+	// Valid string-only
+	require.NoError(t, c.AddTask(workers.TaskValue[string](func(context.Context) string { return "" })))
+	// Valid error-only for string workers (no result emitted)
+	require.NoError(t, c.AddTask(workers.TaskError[string](func(context.Context) error { return nil })))
 }
 
 type testStruct struct{}
@@ -53,130 +25,29 @@ type testStruct struct{}
 func TestTaskTypePointerStruct(t *testing.T) {
 	c := workers.New[*testStruct](context.Background(), &workers.Config{TasksBufferSize: 5})
 
-	err := c.AddTask(func(context.Context) (*testStruct, error) {
-		return &testStruct{}, nil
-	})
-	require.NoError(t, err, "Failed to add (*testStruct, error) task to workers")
-
-	err = c.AddTask(func(context.Context) *testStruct {
-		return &testStruct{}
-	})
-	require.NoError(t, err, "Failed to add (*testStruct) task to workers")
-
-	err = c.AddTask(func(context.Context) error {
-		return nil
-	})
-	require.NoError(t, err, "Failed to add (error) task to workers")
-
-	err = c.AddTask(func(context.Context) testStruct {
-		return testStruct{}
-	})
-	require.ErrorIs(
-		t,
-		err,
-		workers.ErrInvalidTaskType,
-		"Expected invalid task type error when adding (testStruct) task to workers",
-	)
-
-	err = c.AddTask(func(context.Context) {})
-	require.ErrorIs(
-		t,
-		err,
-		workers.ErrInvalidTaskType,
-		"Expected invalid task type error when adding (void) task to workers",
-	)
-
-	err = c.AddTask(func(context.Context) interface{} {
-		return nil
-	})
-	require.ErrorIs(
-		t,
-		err,
-		workers.ErrInvalidTaskType,
-		"Expected invalid task type error when adding (interface{}) task to workers",
-	)
+	// Valid (*testStruct, error)
+	require.NoError(t, c.AddTask(workers.TaskFunc[*testStruct](func(context.Context) (*testStruct, error) { return &testStruct{}, nil })))
+	// Valid *testStruct only
+	require.NoError(t, c.AddTask(workers.TaskValue[*testStruct](func(context.Context) *testStruct { return &testStruct{} })))
+	// Valid error-only for *testStruct workers (no result emitted)
+	require.NoError(t, c.AddTask(workers.TaskError[*testStruct](func(context.Context) error { return nil })))
 }
 
 func TestTaskTypeInterface(t *testing.T) {
 	c := workers.New[interface{}](context.Background(), &workers.Config{TasksBufferSize: 10})
 
-	err := c.AddTask(func(context.Context) (interface{}, error) {
-		return nil, nil
-	})
-	require.NoError(t, err, "Failed to add (interface{}, error) task to workers")
-
-	err = c.AddTask(func(context.Context) interface{} {
-		return nil
-	})
-	require.NoError(t, err, "Failed to add (interface) task to workers")
-
-	err = c.AddTask(func(context.Context) error {
-		return nil
-	})
-	require.NoError(t, err, "Failed to add (error) task to workers")
-
-	err = c.AddTask(func(context.Context) (string, error) {
-		return "", nil
-	})
-	require.ErrorIs(
-		t,
-		err,
-		workers.ErrInvalidTaskType,
-		"Expected invalid task type error when adding (string, error) task to workers",
-	)
-
-	err = c.AddTask(func(context.Context) testStruct {
-		return testStruct{}
-	})
-	require.ErrorIs(
-		t,
-		err,
-		workers.ErrInvalidTaskType,
-		"Expected invalid task type error when adding (testStruct) task to workers",
-	)
-
-	err = c.AddTask(func(context.Context) {})
-	require.ErrorIs(
-		t,
-		err,
-		workers.ErrInvalidTaskType,
-		"Expected invalid task type error when adding (void) task to workers",
-	)
+	// Valid (interface{}, error)
+	require.NoError(t, c.AddTask(workers.TaskFunc[interface{}](func(context.Context) (interface{}, error) { return nil, nil })))
+	// Valid interface{} only
+	require.NoError(t, c.AddTask(workers.TaskValue[interface{}](func(context.Context) interface{} { return nil })))
+	// Valid error-only for interface{} workers (no result emitted)
+	require.NoError(t, c.AddTask(workers.TaskError[interface{}](func(context.Context) error { return nil })))
 }
 
 func TestTaskTypeFunc(t *testing.T) {
 	c := workers.New[func()](context.Background(), &workers.Config{TasksBufferSize: 10})
 
-	err := c.AddTask(func(context.Context) (func(), error) {
-		return nil, nil
-	})
-	require.NoError(t, err, "Failed to add (func(), error) task to workers")
-
-	err = c.AddTask(func(context.Context) func() {
-		return nil
-	})
-	require.NoError(t, err, "Failed to add (func()) task to workers")
-
-	err = c.AddTask(func(context.Context) error {
-		return nil
-	})
-	require.NoError(t, err, "Failed to add (error) task to workers")
-
-	err = c.AddTask(func(context.Context) interface{} {
-		return nil
-	})
-	require.ErrorIs(
-		t,
-		err,
-		workers.ErrInvalidTaskType,
-		"Expected invalid task type error when adding (interface{}) task to workers",
-	)
-
-	err = c.AddTask(func(context.Context) {})
-	require.ErrorIs(
-		t,
-		err,
-		workers.ErrInvalidTaskType,
-		"Expected invalid task type error when adding (void) task to workers",
-	)
+	require.NoError(t, c.AddTask(workers.TaskFunc[func()](func(context.Context) (func(), error) { return nil, nil })))
+	require.NoError(t, c.AddTask(workers.TaskValue[func()](func(context.Context) func() { return nil })))
+	require.NoError(t, c.AddTask(workers.TaskError[func()](func(context.Context) error { return nil })))
 }

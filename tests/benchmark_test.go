@@ -28,10 +28,10 @@ func fn(n int) func(context.Context) string {
 	}
 }
 
-func getTasks(start, end, step int) []interface{} {
-	tasks := make([]interface{}, 0, (end-start)/step)
+func getTasks(start, end, step int) []workers.Task[string] {
+	tasks := make([]workers.Task[string], 0, (end-start)/step)
 	for i := start; i < end; i += step {
-		tasks = append(tasks, fn(i))
+		tasks = append(tasks, workers.TaskValue[string](fn(i)))
 	}
 	return tasks
 }
@@ -42,7 +42,7 @@ func BenchmarkWorkers(b *testing.B) {
 		maxWorkers       uint
 		bufferSize       int
 		startImmediately bool
-		tasks            []interface{}
+		tasks            []workers.Task[string]
 	}{
 		// less big tasks, start immediately.
 		{

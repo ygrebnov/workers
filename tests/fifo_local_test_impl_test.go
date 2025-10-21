@@ -7,24 +7,6 @@ import (
 	"github.com/ygrebnov/workers"
 )
 
-type runnable[R any] struct {
-	fn         func(context.Context) (R, error)
-	sendResult bool
-}
-
-func makeRunnable[R any](fn interface{}) (runnable[R], error) {
-	switch typed := fn.(type) {
-	case func(context.Context) (R, error):
-		return runnable[R]{fn: typed, sendResult: true}, nil
-	case func(context.Context) R:
-		return runnable[R]{fn: func(ctx context.Context) (R, error) { return typed(ctx), nil }, sendResult: true}, nil
-	case func(context.Context) error:
-		return runnable[R]{fn: func(ctx context.Context) (R, error) { var zero R; return zero, typed(ctx) }, sendResult: false}, nil
-	default:
-		return runnable[R]{}, workers.ErrInvalidTaskType
-	}
-}
-
 // fifoWorkers is a simple FIFO executor that runs tasks sequentially in submission order.
 // It implements the Workers interface without using any pool; a single goroutine executes tasks one by one.
 // It honors Config.StartImmediately, Config.TasksBufferSize, and Config.StopOnError.
@@ -37,7 +19,7 @@ type fifoWorkers[R any] struct {
 
 	once sync.Once
 
-	tasks   chan runnable[R]
+	tasks   chan workers.Task[R]
 	results chan R
 	errors  chan error
 }
@@ -55,7 +37,7 @@ func newFIFO[R any](ctx context.Context, config *workers.Config) workers.Workers
 	}
 	e := make(chan error, eCap)
 
-	tasks := make(chan runnable[R], config.TasksBufferSize)
+	tasks := make(chan workers.Task[R], config.TasksBufferSize)
 	if config.TasksBufferSize == 0 {
 		tasks = nil // to return error in AddTask until Start
 	}
@@ -82,7 +64,7 @@ func (w *fifoWorkers[R]) Start(ctx context.Context) {
 		}
 
 		if w.tasks == nil {
-			w.tasks = make(chan runnable[R])
+			w.tasks = make(chan workers.Task[R])
 		}
 
 		go func() {
@@ -92,7 +74,7 @@ func (w *fifoWorkers[R]) Start(ctx context.Context) {
 					w.tasks = nil
 					return
 				case t := <-w.tasks:
-					res, err := t.fn(ctx)
+					res, err := t.Run(ctx)
 					if err != nil {
 						w.errors <- err
 						if w.config.StopOnError && cancel != nil {
@@ -101,7 +83,7 @@ func (w *fifoWorkers[R]) Start(ctx context.Context) {
 						}
 						continue
 					}
-					if t.sendResult {
+					if t.SendResult() {
 						w.results <- res
 					}
 				}
@@ -110,18 +92,14 @@ func (w *fifoWorkers[R]) Start(ctx context.Context) {
 	})
 }
 
-func (w *fifoWorkers[R]) AddTask(t interface{}) error {
-	r, err := makeRunnable[R](t)
-	if err != nil {
-		return err
-	}
+func (w *fifoWorkers[R]) AddTask(t workers.Task[R]) error {
 	switch {
 	case w.tasks == nil:
 		return workers.ErrInvalidState
 	case cap(w.tasks) > 0 && len(w.tasks) == cap(w.tasks):
 		panic("tasks channel is full")
 	}
-	w.tasks <- r
+	w.tasks <- t
 	return nil
 }
 

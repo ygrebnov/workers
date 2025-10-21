@@ -60,7 +60,7 @@ func memHeavyTask(size int) func(context.Context) float64 {
 	}
 }
 
-func runBench[R any](b *testing.B, tasks []interface{}, mk func() workers.Workers[R]) {
+func runBench[R any](b *testing.B, tasks []workers.Task[R], mk func() workers.Workers[R]) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		w := mk()
@@ -97,9 +97,9 @@ func runBench[R any](b *testing.B, tasks []interface{}, mk func() workers.Worker
 func BenchmarkFIFO_vs_Pools_Matrix256_64Tasks(b *testing.B) {
 	n := 256         // medium CPU and memory per task
 	tasksCount := 64 // medium number of tasks
-	tasks := make([]interface{}, 0, tasksCount)
+	tasks := make([]workers.Task[float64], 0, tasksCount)
 	for i := 0; i < tasksCount; i++ {
-		tasks = append(tasks, cpuHeavyTask(n))
+		tasks = append(tasks, workers.TaskValue[float64](cpuHeavyTask(n)))
 	}
 
 	ctx := context.Background()
@@ -133,9 +133,9 @@ func BenchmarkFIFO_vs_Pools_Matrix256_64Tasks(b *testing.B) {
 func BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks(b *testing.B) {
 	size := 4 * 1024 * 1024 // 4 MiB per task
 	tasksCount := 64        // medium number of tasks
-	tasks := make([]interface{}, 0, tasksCount)
+	tasks := make([]workers.Task[float64], 0, tasksCount)
 	for i := 0; i < tasksCount; i++ {
-		tasks = append(tasks, memHeavyTask(size))
+		tasks = append(tasks, workers.TaskValue[float64](memHeavyTask(size)))
 	}
 
 	ctx := context.Background()

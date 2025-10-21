@@ -16,7 +16,7 @@ type testCase struct {
 	name                 string
 	config               *workers.Config
 	nTasks               int
-	task                 func(int) interface{}
+	task                 func(int) workers.Task[string]
 	expectedAddTaskError *errAddTask
 	expectedMaxResults   *int
 	expectedResults      []string

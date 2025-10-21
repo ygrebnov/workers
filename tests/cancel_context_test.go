@@ -19,8 +19,8 @@ func TestCancelContext(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, true, false, false))
 			},
 			// expectedResults: getExpectedResults(1, 2, 3),
 			expectedMaxResults: ptrInt(3),
@@ -35,8 +35,8 @@ func TestCancelContext(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, true, false, false))
 			},
 			// expectedResults: getExpectedResults(1, 2, 3),
 			expectedMaxResults: ptrInt(3),
@@ -51,8 +51,8 @@ func TestCancelContext(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, true, false, false))
 			},
 			// expectedResults: getExpectedResults(1, 2, 3),
 			expectedMaxResults: ptrInt(3),
@@ -67,8 +67,8 @@ func TestCancelContext(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, true, false, false))
 			},
 			// expectedResults: getExpectedResults(1, 2, 3),
 			expectedMaxResults: ptrInt(3),
@@ -83,8 +83,8 @@ func TestCancelContext(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, true, false, false))
 			},
 			expectedResults: []string{},
 			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
@@ -98,8 +98,8 @@ func TestCancelContext(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, true, false, false))
 			},
 			expectedResults: []string{},
 			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
@@ -114,8 +114,8 @@ func TestCancelContext(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, true, false, false))
 			},
 			// expectedResults: getExpectedResults(1, 2, 3),
 			expectedMaxResults: ptrInt(3),
@@ -131,8 +131,8 @@ func TestCancelContext(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, true, false, false))
 			},
 			// expectedResults: getExpectedResults(1, 2, 3),
 			expectedMaxResults: ptrInt(3),
@@ -148,8 +148,8 @@ func TestCancelContext(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, true, false, false))
 			},
 			// expectedResults: getExpectedResults(1, 2, 3),
 			expectedMaxResults: ptrInt(3),
@@ -165,8 +165,8 @@ func TestCancelContext(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, true, false, false))
 			},
 			// expectedResults: getExpectedResults(1, 2, 3),
 			expectedMaxResults: ptrInt(3),
@@ -182,8 +182,8 @@ func TestCancelContext(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, true, false, false))
 			},
 			expectedResults: []string{},
 			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},
@@ -198,8 +198,8 @@ func TestCancelContext(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, true, false, false))
 			},
 			expectedResults: []string{},
 			expectedErrors:  []string{errorTaskContextCancelled, errorTaskContextCancelled},

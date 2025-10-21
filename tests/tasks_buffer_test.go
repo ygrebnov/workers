@@ -16,8 +16,8 @@ func TestTasksBuffer(t *testing.T) {
 				TasksBufferSize:  5, // zero value tested in nominal_test.go
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, false, false, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
 			expectedErrors:  []string{},
@@ -31,8 +31,8 @@ func TestTasksBuffer(t *testing.T) {
 				TasksBufferSize:  5, // zero value tested in nominal_test.go
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, false, false, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
 			expectedErrors:  []string{},
@@ -41,8 +41,8 @@ func TestTasksBuffer(t *testing.T) {
 		{
 			name:   "taskString_dynamic_delayedStart_noBuffer",
 			nTasks: 1,
-			task: func(i int) interface{} {
-				return newTaskString(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, false, false, false))
 			},
 			expectedAddTaskError: &errAddTask{err: workers.ErrInvalidState.Error(), i: 1},
 			expectedResults:      []string{},
@@ -57,8 +57,8 @@ func TestTasksBuffer(t *testing.T) {
 				TasksBufferSize: 4,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, false, false, false))
 			},
 			expectedAddTaskError: &errAddTask{i: 5, shouldPanic: true},
 			expectedResults:      getExpectedResults(1, 2, 3, 4),

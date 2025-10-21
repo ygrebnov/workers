@@ -18,7 +18,7 @@ func TestDefaultsParity_New_vs_NewOptions(t *testing.T) {
 
 	// By default, StartImmediately is false and TasksBufferSize is 0.
 	// Adding a task before Start should return ErrInvalidState for both.
-	task := func(context.Context) int { return 42 }
+	task := workers.TaskValue[int](func(context.Context) int { return 42 })
 	require.ErrorIs(t, w1.AddTask(task), workers.ErrInvalidState)
 	require.ErrorIs(t, w2.AddTask(task), workers.ErrInvalidState)
 
