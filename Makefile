@@ -21,12 +21,20 @@ test: dir-coverage
 	@go tool cover -func=$(COVERAGE_PATH)coverage.txt -o $(COVERAGE_PATH)functions.txt
 	@go tool cover -html=$(COVERAGE_PATH)coverage.txt -o $(COVERAGE_PATH)coverage.html
 
+# Run only the FIFO vs Pools benchmarks with memory stats and save output
 bench: dir-coverage
-	@go test ./tests/... -memprofile mem.prof -bench=. --run BenchmarkWorkers
-	@go tool pprof -http :8080 mem.prof
+	@echo "Running FIFO vs Pools benchmarks..."
+	@go test -run ^$$ -bench ^BenchmarkFIFO_vs_Pools -benchmem ./tests | tee $(COVERAGE_PATH)bench.txt
 
+# Save timestamped benchmark results for historical comparisons
+bench-save: dir-coverage
+	@ts=$$(date +%Y%m%d_%H%M%S); \
+	echo "Saving benchmarks to $(COVERAGE_PATH)bench_$${ts}.txt"; \
+	go test -run ^$$ -bench ^BenchmarkFIFO_vs_Pools -benchmem ./tests > $(COVERAGE_PATH)bench_$${ts}.txt
+
+# Memory profiling for tests (not benchmarks)
 test-pprof: dir-profiling
 	@go test ./tests/... -memprofile $(PROFILING_PATH)mem.prof
 	@go tool pprof -http :8080 $(PROFILING_PATH)mem.prof
 
-.PHONY: clean dir-coverage dir-profiling lint test bench test-pprof
+.PHONY: clean dir-coverage dir-profiling lint test bench bench-save test-pprof
