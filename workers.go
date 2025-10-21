@@ -214,7 +214,7 @@ func (w *Workers[R]) Start(ctx context.Context) {
 			for {
 				select {
 				case <-ctx.Done():
-					w.tasks = nil
+					// stop dispatcher without mutating w.tasks to avoid races
 					return
 
 				case t := <-w.tasks:
@@ -239,8 +239,7 @@ func (w *Workers[R]) Start(ctx context.Context) {
 // - Finally closes results and errors channels owned by this instance.
 func (w *Workers[R]) Close() {
 	w.closeOnce.Do(func() {
-		// prevent further AddTask attempts from succeeding
-		w.tasks = nil
+		// prevent further AddTask attempts from succeeding via context cancellation (no need to nil tasks)
 
 		// cancel internal context to stop dispatch and forwarder
 		if w.cancel != nil {
@@ -300,6 +299,11 @@ func (w *Workers[R]) AddTask(t Task[R]) error {
 
 	// If we've been started and the internal context is canceled, don't block; return ErrInvalidState.
 	if w.ctx != nil {
+		// If already canceled, fail fast deterministically.
+		if w.ctx.Err() != nil {
+			return ErrInvalidState
+		}
+		// Otherwise send, but remain cancellation-aware while sending (for unbuffered or saturated channel).
 		select {
 		case w.tasks <- t:
 			return nil
