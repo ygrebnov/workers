@@ -43,6 +43,12 @@ type Workers[R interface{}] struct {
 
 	// waits for the stop-on-error forwarder goroutine to exit before closing errors
 	forwarderWG sync.WaitGroup
+
+	// tracks detached sender goroutines that forward outward errors asynchronously
+	errorsSendWG sync.WaitGroup
+
+	// closed during Close to unblock any pending detached senders safely
+	closeCh chan struct{}
 }
 
 // noCopy is a vet-recognized marker to discourage copying types with this field embedded.
@@ -125,6 +131,9 @@ func (w *Workers[R]) Start(ctx context.Context) {
 		// create internal context that Close() can cancel
 		w.ctx, w.cancel = context.WithCancel(ctx)
 
+		// initialize closeCh used to stop detached senders during Close
+		w.closeCh = make(chan struct{})
+
 		if w.tasks == nil {
 			w.tasks = make(chan Task[R])
 		}
@@ -141,12 +150,21 @@ func (w *Workers[R]) Start(ctx context.Context) {
 					case e := <-w.errorsBuf:
 						// Cancel first so dispatch loop stops promptly.
 						w.cancel()
-						// Best-effort, non-blocking forward; drop if outward is saturated.
+						// Try immediate forward; if it would block, forward asynchronously with Close-aware cancellation.
 						select {
 						case w.errors <- e:
-							// forwarded
+							// forwarded synchronously
 						default:
-							// drop to avoid blocking or leaking goroutines
+							w.errorsSendWG.Add(1)
+							go func(err error) {
+								defer w.errorsSendWG.Done()
+								select {
+								case w.errors <- err:
+									// delivered when reader appears
+								case <-w.closeCh:
+									// drop if closing
+								}
+							}(e)
 						}
 					}
 				}
@@ -196,26 +214,39 @@ func (w *Workers[R]) Close() {
 		// ensure forwarder stopped before closing outward errors
 		w.forwarderWG.Wait()
 
-		// drain any remaining internal errors best-effort
-		if w.errorsBuf != nil {
-			for {
-				select {
-				case e := <-w.errorsBuf:
-					select {
-					case w.errors <- e:
-						// forwarded
-					default:
-						// drop to avoid blocking or leaking goroutines
-					}
-				default:
-					goto drained
-				}
-			}
+		// signal detached senders to exit and wait for them
+		if w.closeCh != nil {
+			close(w.closeCh)
 		}
-	drained:
+		w.errorsSendWG.Wait()
+
+		// drain any remaining internal errors best-effort
+		w.drainInternalErrors()
+
 		close(w.results)
 		close(w.errors)
 	})
+}
+
+// drainInternalErrors forwards any buffered internal errors to the outward channel best-effort.
+// Non-blocking send; drops if saturated. Safe to call when errorsBuf is nil.
+func (w *Workers[R]) drainInternalErrors() {
+	if w.errorsBuf == nil {
+		return
+	}
+	for {
+		select {
+		case e := <-w.errorsBuf:
+			select {
+			case w.errors <- e:
+				// forwarded
+			default:
+				// drop
+			}
+		default:
+			return
+		}
+	}
 }
 
 // AddTask adds a task to the Workers queue.
