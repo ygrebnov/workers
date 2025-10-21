@@ -143,10 +143,6 @@ func TestTaskResultError_Execute_AllBranches(t *testing.T) {
 			if err != nil {
 				t.Fatalf("newTask error: %v", err)
 			}
-			tre, ok := task.(*taskResultError[int])
-			if !ok {
-				t.Fatalf("constructed task has wrong concrete type: %T", task)
-			}
 
 			var ctx context.Context
 			var cancel context.CancelFunc
@@ -158,7 +154,7 @@ func TestTaskResultError_Execute_AllBranches(t *testing.T) {
 			}
 			defer cancel()
 
-			got, execErr := tre.execute(ctx)
+			got, execErr := task.execute(ctx)
 			if got != tt.expectR {
 				t.Fatalf("result = %v, want %v", got, tt.expectR)
 			}
@@ -217,10 +213,6 @@ func TestTaskResult_Execute_AllBranches(t *testing.T) {
 			if err != nil {
 				t.Fatalf("newTask error: %v", err)
 			}
-			tr, ok := task.(*taskResult[int])
-			if !ok {
-				t.Fatalf("constructed task has wrong concrete type: %T", task)
-			}
 
 			var ctx context.Context
 			var cancel context.CancelFunc
@@ -232,7 +224,7 @@ func TestTaskResult_Execute_AllBranches(t *testing.T) {
 			}
 			defer cancel()
 
-			got, execErr := tr.execute(ctx)
+			got, execErr := task.execute(ctx)
 			if got != tt.expectR {
 				t.Fatalf("result = %v, want %v", got, tt.expectR)
 			}
@@ -299,10 +291,6 @@ func TestTaskError_Execute_AllBranches(t *testing.T) {
 			if err != nil {
 				t.Fatalf("newTask error: %v", err)
 			}
-			te, ok := task.(*taskError[int])
-			if !ok {
-				t.Fatalf("constructed task has wrong concrete type: %T", task)
-			}
 
 			var ctx context.Context
 			var cancel context.CancelFunc
@@ -314,7 +302,7 @@ func TestTaskError_Execute_AllBranches(t *testing.T) {
 			}
 			defer cancel()
 
-			got, execErr := te.execute(ctx)
+			got, execErr := task.execute(ctx)
 			if got != tt.expectR {
 				t.Fatalf("result = %v, want %v", got, tt.expectR)
 			}

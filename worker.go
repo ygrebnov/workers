@@ -21,7 +21,7 @@ func (w *worker[R]) execute(ctx context.Context, t task[R]) {
 		return
 	}
 
-	if _, ok := t.(*taskError[R]); !ok {
+	if t.sendResult() {
 		w.results <- result
 	}
 }
