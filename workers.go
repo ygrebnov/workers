@@ -298,6 +298,18 @@ func (w *Workers[R]) AddTask(t Task[R]) error {
 		panic("tasks channel is full")
 	}
 
+	// If we've been started and the internal context is canceled, don't block; return ErrInvalidState.
+	if w.ctx != nil {
+		select {
+		case w.tasks <- t:
+			return nil
+		case <-w.ctx.Done():
+			return ErrInvalidState
+		}
+	}
+
+	// Not started yet (ctx is nil) but tasks channel exists (e.g., constructed with non-zero buffer).
+	// Fall back to a normal send.
 	w.tasks <- t
 	return nil
 }

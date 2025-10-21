@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -23,38 +24,45 @@ func TestZeroValue_Start_InitializesDefaults_AndRunsTasks(t *testing.T) {
 
 	w.Start(ctx)
 
-	// Enqueue several tasks and then Close; Close waits for in-flight tasks and closes channels.
+	// Enqueue several tasks.
 	const n = 5
 	for i := 0; i < n; i++ {
 		x := i // capture loop variable
 		require.NoError(t, w.AddTask(workers.TaskValue[int](func(ctx context.Context) int { return x * x })))
 	}
 
-	w.Close()
-
-	// Drain channels and verify results; errors should be empty.
+	// Collect exactly n results (with a timeout) before closing to avoid racy inflight accounting.
 	results := make([]int, 0, n)
-	errs := 0
-	resultsClosed, errorsClosed := false, false
-	for !(resultsClosed && errorsClosed) {
+	timer := time.NewTimer(500 * time.Millisecond)
+	defer timer.Stop()
+	for len(results) < n {
 		select {
-		case r, ok := <-w.GetResults():
-			if !ok {
-				resultsClosed = true
-				continue
-			}
+		case r := <-w.GetResults():
 			results = append(results, r)
-		case _, ok := <-w.GetErrors():
-			if !ok {
-				errorsClosed = true
-				continue
-			}
-			errs++
+		case err := <-w.GetErrors():
+			t.Fatalf("unexpected error: %v", err)
+		case <-timer.C:
+			t.Fatalf("timed out waiting for results: got %d/%d", len(results), n)
 		}
 	}
 
-	require.Equal(t, 0, errs)
-	require.Len(t, results, n)
+	// Now close and ensure channels are closed.
+	w.Close()
+
+	// After Close, both channels must be closed.
+	select {
+	case _, ok := <-w.GetResults():
+		require.False(t, ok, "results should be closed after Close()")
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("timeout waiting for results channel to close")
+	}
+	select {
+	case _, ok := <-w.GetErrors():
+		require.False(t, ok, "errors should be closed after Close()")
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("timeout waiting for errors channel to close")
+	}
+
 	sort.Ints(results)
 	expected := []int{0, 1, 4, 9, 16}
 	require.Equal(t, expected, results)
