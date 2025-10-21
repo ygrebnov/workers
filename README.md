@@ -34,6 +34,10 @@ go get github.com/ygrebnov/workers
 - NewOptions(ctx, opts ...Option): preferred constructor using functional options.
 - New(ctx, *Config): current stable constructor; planned for deprecation in a future major version.
 
+## Zero-value usage
+- The zero value of Workers is usable after calling Start(ctx); it initializes with the same defaults listed below.
+- For custom configuration, construct with New or NewOptions.
+
 ## Defaults
 
 Unless overridden, a new instance uses:
