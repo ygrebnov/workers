@@ -22,7 +22,13 @@ GOLANGCI_LINT_LINK 	:= $(BIN_DIR)/golangci-lint
 $(GOLANGCI_LINT_LINK): $(GOLANGCI_LINT)
 	$(call create-symlink,$(GOLANGCI_LINT),$(GOLANGCI_LINT_LINK))
 
-TOOLS := install-golangci-lint
+BENCHSTAT           := $(BIN_DIR)/benchstat
+
+.PHONY: install-benchstat
+install-benchstat:
+	$(call go-install-tool,$(BENCHSTAT),golang.org/x/perf/cmd/benchstat,latest)
+
+TOOLS := install-golangci-lint install-benchstat
 
 .PHONY: install-tools
 install-tools: $(TOOLS)
