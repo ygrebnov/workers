@@ -136,20 +136,14 @@ func (w *Workers[R]) Start(ctx context.Context) {
 		if w.results == nil {
 			w.results = make(chan R, w.config.ResultsBufferSize)
 		}
+		if w.errors == nil {
+			w.errors = make(chan error, w.config.ErrorsBufferSize)
+		}
 
 		// For StopOnError, workers write to an internal buffer that is forwarded outward.
 		// Otherwise, workers write directly to the outward errors channel.
-		if w.config.StopOnError {
-			if w.errorsBuf == nil {
-				w.errorsBuf = make(chan error, w.config.StopOnErrorErrorsBufferSize)
-			}
-			if w.errors == nil {
-				w.errors = make(chan error, w.config.ErrorsBufferSize)
-			}
-		} else {
-			if w.errors == nil {
-				w.errors = make(chan error, w.config.ErrorsBufferSize)
-			}
+		if w.config.StopOnError && w.errorsBuf == nil {
+			w.errorsBuf = make(chan error, w.config.StopOnErrorErrorsBufferSize)
 		}
 
 		// Initialize pool if missing.
@@ -179,54 +173,60 @@ func (w *Workers[R]) Start(ctx context.Context) {
 
 		// If StopOnError is enabled, forward internal errors to the outward channel.
 		if w.config.StopOnError {
-			w.forwarderWG.Add(1)
-			go func(ctx context.Context) {
-				defer w.forwarderWG.Done()
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case e := <-w.errorsBuf:
-						// Cancel first so dispatch loop stops promptly.
-						w.cancel()
-						// Try immediate forward; if it would block, forward asynchronously with Close-aware cancellation.
-						select {
-						case w.errors <- e:
-							// forwarded synchronously
-						default:
-							w.errorsSendWG.Add(1)
-							go func(err error) {
-								defer w.errorsSendWG.Done()
-								select {
-								case w.errors <- err:
-									// delivered when reader appears
-								case <-w.closeCh:
-									// drop if closing
-								}
-							}(e)
-						}
-					}
-				}
-			}(w.ctx)
+			w.forwardErrors()
 		}
 
-		go func(ctx context.Context) {
-			for {
-				select {
-				case <-ctx.Done():
-					// stop dispatcher without mutating w.tasks to avoid races
-					return
+		go w.dispatchTasks(w.ctx)
+	})
+}
 
-				case t := <-w.tasks:
-					w.inflight.Add(1)
-					go func(tt Task[R]) {
-						defer w.inflight.Done()
-						w.dispatch(ctx, tt)
-					}(t)
+func (w *Workers[R]) forwardErrors() {
+	w.forwarderWG.Add(1)
+	go func(ctx context.Context) {
+		defer w.forwarderWG.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e := <-w.errorsBuf:
+				// Cancel first so dispatch loop stops promptly.
+				w.cancel()
+				// Try immediate forward; if it would block, forward asynchronously with Close-aware cancellation.
+				select {
+				case w.errors <- e:
+					// forwarded synchronously
+				default:
+					w.errorsSendWG.Add(1)
+					go func(err error) {
+						defer w.errorsSendWG.Done()
+						select {
+						case w.errors <- err:
+							// delivered when reader appears
+						case <-w.closeCh:
+							// drop if closing
+						}
+					}(e)
 				}
 			}
-		}(w.ctx)
-	})
+		}
+	}(w.ctx)
+}
+
+func (w *Workers[R]) dispatchTasks(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			// stop dispatcher without mutating w.tasks to avoid races
+			return
+
+		case t := <-w.tasks:
+			w.inflight.Add(1)
+			go func(tt Task[R]) {
+				defer w.inflight.Done()
+				w.dispatch(ctx, tt)
+			}(t)
+		}
+	}
 }
 
 // Close stops scheduling new work, waits for in-flight tasks to finish, then closes results and errors.
