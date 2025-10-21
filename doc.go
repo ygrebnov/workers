@@ -7,6 +7,13 @@
 //   - NewOptions(ctx, opts ...Option): options-based constructor. This will
 //     become the primary New in the next major version. Prefer this in new code.
 //
+// Zero value and lifecycle
+//   - The zero value of Workers is usable after calling Start(ctx); it initializes with defaults.
+//     For custom configuration, construct via New or NewOptions.
+//   - Start(ctx) is safe to call at most once; concurrent calls are idempotent.
+//   - Close() is provided to stop scheduling, wait for in-flight work to finish, and close
+//     the results and errors channels. Close is idempotent and safe for concurrent use.
+//
 // Defaults
 // Unless overridden, the following defaults apply to a newly created instance:
 //   - MaxWorkers: 0 (dynamic pool)
@@ -17,14 +24,27 @@
 //   - ErrorsBufferSize: 1024
 //   - StopOnErrorErrorsBufferSize: 100
 //
-// Channel lifecycle
-// The library exposes two channels:
-//   - Results: deliver task results (for non-error-only tasks)
-//   - Errors: deliver task execution errors
+// Channels and Close semantics
+// The library exposes two channels owned by a Workers instance:
+//   - Results: delivers task results (for non-error-only tasks)
+//   - Errors: delivers task execution errors
 //
-// The library does not close these channels automatically. The recommended pattern
-// is to drain channels while tasks are running and close them in application code
-// once you know there will be no more messages (e.g., after a WaitGroup is done).
+// Closing strategy:
+//   - If you call Close(), the library will:
+//   - cancel the internal context so no new tasks are dispatched,
+//   - wait for in-flight tasks to finish,
+//   - forward any buffered internal errors (when StopOnError is enabled), then
+//   - close both Results and Errors channels.
+//     Do not manually close the channels if you use Close(); double-closing panics in Go.
+//   - If you manage lifecycle manually (advanced use), you can close channels yourself once
+//     you're certain no further sends can occur. In that case, do not call Close().
+//
+// StopOnError behavior
+//   - When StopOnError is enabled, the first error cancels the controller promptly to stop scheduling.
+//     The triggering error is forwarded to the outward Errors channel. If that channel is full, the
+//     error is dropped (best-effort forwarding) to avoid blocking cancellation and avoid goroutine leaks.
+//     Close() forwards any remaining buffered internal errors best-effort before closing the outward
+//     Errors channel; saturated outward buffers may still drop some errors.
 //
 // Pools
 //   - Dynamic pool (default): grows and shrinks as needed via sync.Pool.

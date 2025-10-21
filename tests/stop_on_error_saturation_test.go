@@ -21,7 +21,7 @@ func TestStopOnError_CancelFirst_OutwardErrorsSaturated(t *testing.T) {
 	defer cancel()
 
 	// Configure controller.
-	w := workers.NewOptions[int](
+	w, err := workers.NewOptions[int](
 		testCtx,
 		workers.WithFixedPool(1),
 		workers.WithStartImmediately(),
@@ -30,9 +30,12 @@ func TestStopOnError_CancelFirst_OutwardErrorsSaturated(t *testing.T) {
 		workers.WithStopOnErrorBuffer(1), // small internal buffer
 		workers.WithTasksBuffer(4),       // small tasks buffer
 	)
+	if err != nil {
+		t.Fatalf("failed to create workers via options: %v", err)
+	}
 
 	// Triggering task: returns error immediately.
-	if err := w.AddTask(func(ctx context.Context) error { return errors.New("boom") }); err != nil {
+	if err := w.AddTask(workers.TaskError[int](func(ctx context.Context) error { return errors.New("boom") })); err != nil {
 		t.Fatalf("unexpected AddTask error for trigger task: %v", err)
 	}
 
@@ -41,10 +44,10 @@ func TestStopOnError_CancelFirst_OutwardErrorsSaturated(t *testing.T) {
 
 	// Attempt to enqueue a second task that would signal if started.
 	started := make(chan struct{}, 1)
-	err := w.AddTask(func(ctx context.Context) error {
+	err = w.AddTask(workers.TaskError[int](func(ctx context.Context) error {
 		started <- struct{}{}
 		return nil
-	})
+	}))
 
 	// Two acceptable outcomes:
 	// - ErrInvalidState: cancellation already took effect and tasks channel is disabled.
@@ -81,7 +84,7 @@ func TestStopOnError_CancelFirst_BufferedOutward_NoDeadlock(t *testing.T) {
 	testCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	w := workers.NewOptions[int](
+	w, err := workers.NewOptions[int](
 		testCtx,
 		workers.WithFixedPool(1),
 		workers.WithStartImmediately(),
@@ -90,18 +93,21 @@ func TestStopOnError_CancelFirst_BufferedOutward_NoDeadlock(t *testing.T) {
 		workers.WithStopOnErrorBuffer(1), // small internal buffer
 		workers.WithTasksBuffer(4),
 	)
+	if err != nil {
+		t.Fatalf("failed to create workers via options: %v", err)
+	}
 
-	if err := w.AddTask(func(ctx context.Context) error { return errors.New("boom") }); err != nil {
+	if err := w.AddTask(workers.TaskError[int](func(ctx context.Context) error { return errors.New("boom") })); err != nil {
 		t.Fatalf("unexpected AddTask error for trigger task: %v", err)
 	}
 
 	time.Sleep(50 * time.Millisecond)
 
 	started := make(chan struct{}, 1)
-	err := w.AddTask(func(ctx context.Context) error {
+	err = w.AddTask(workers.TaskError[int](func(ctx context.Context) error {
 		started <- struct{}{}
 		return nil
-	})
+	}))
 
 	if err != nil {
 		if !errors.Is(err, workers.ErrInvalidState) {
@@ -140,17 +146,20 @@ func TestOutwardErrors_BufferedOverflow_NoStopOnError(t *testing.T) {
 		tasksCount = 10
 	)
 
-	w := workers.NewOptions[int](
+	w, err := workers.NewOptions[int](
 		testCtx,
 		workers.WithFixedPool(poolSize),
 		workers.WithStartImmediately(),
 		workers.WithErrorsBuffer(bufSize),
 		workers.WithTasksBuffer(tasksCount),
 	)
+	if err != nil {
+		t.Fatalf("failed to create workers via options: %v", err)
+	}
 
 	// Enqueue more tasks than the outward errors buffer size; each returns an error immediately.
 	for i := 0; i < tasksCount; i++ {
-		if err := w.AddTask(func(ctx context.Context) error { return errors.New("boom") }); err != nil {
+		if err := w.AddTask(workers.TaskError[int](func(ctx context.Context) error { return errors.New("boom") })); err != nil {
 			t.Fatalf("unexpected AddTask error at %d: %v", i, err)
 		}
 	}

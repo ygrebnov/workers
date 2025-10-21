@@ -12,11 +12,18 @@ import (
 	"github.com/ygrebnov/workers"
 )
 
+type testWorkers[R any] interface {
+	Start(context.Context)
+	AddTask(workers.Task[R]) error
+	GetResults() chan R
+	GetErrors() chan error
+}
+
 type testCase struct {
 	name                 string
 	config               *workers.Config
 	nTasks               int
-	task                 func(int) interface{}
+	task                 func(int) workers.Task[string]
 	expectedAddTaskError *errAddTask
 	expectedMaxResults   *int
 	expectedResults      []string

@@ -44,12 +44,12 @@ func Test_Start_ThreadSafety(t *testing.T) {
 
 			atomic.AddInt32(&startCount, 1)
 
-			err := w.AddTask(func(ctx context.Context) (string, error) {
+			err := w.AddTask(workers.TaskFunc[string](func(ctx context.Context) (string, error) {
 				val, ok := ctx.Value(key).(string)
 				require.True(t, ok, "Expected value to be of type string")
 
 				return val, nil
-			})
+			}))
 			require.NoError(t, err, "Failed to add task to workers")
 		}()
 	}

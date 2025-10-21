@@ -2,30 +2,30 @@ package workers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 )
 
-var ErrInvalidTaskType = errors.New("invalid task type")
-
-type task[R interface{}] interface {
-	execute(ctx context.Context) (R, error)
+// Task encapsulates a unit of work function and whether a successful execution
+// should emit a result to the results channel.
+// Use TaskFunc / TaskValue / TaskError to construct instances.
+type Task[R interface{}] struct {
+	fn          func(context.Context) (R, error)
+	_sendResult bool
 }
 
-func newTask[R interface{}](fn interface{}) (task[R], error) {
-	switch typed := fn.(type) {
-	case func(context.Context) (R, error):
-		return &taskResultError[R]{fn: typed}, nil
+// TaskFunc adapts func(ctx) (R, error) to a Task that emits results on success.
+func TaskFunc[R interface{}](fn func(context.Context) (R, error)) Task[R] {
+	return Task[R]{fn: fn, _sendResult: true}
+}
 
-	case func(ctx context.Context) R:
-		return &taskResult[R]{fn: typed}, nil
+// TaskValue adapts func(ctx) R to a Task that emits results on success.
+func TaskValue[R interface{}](fn func(context.Context) R) Task[R] {
+	return Task[R]{fn: func(ctx context.Context) (R, error) { return fn(ctx), nil }, _sendResult: true}
+}
 
-	case func(context.Context) error:
-		return &taskError[R]{fn: typed}, nil
-
-	default:
-		return nil, ErrInvalidTaskType
-	}
+// TaskError adapts func(ctx) error to a Task that does NOT emit results.
+func TaskError[R interface{}](fn func(context.Context) error) Task[R] {
+	return Task[R]{fn: func(ctx context.Context) (R, error) { var zero R; return zero, fn(ctx) }, _sendResult: false}
 }
 
 // execTask centralizes goroutine launch, panic recovery, and ctx cancellation.
@@ -41,7 +41,7 @@ func execTask[R interface{}](ctx context.Context, call func() (R, error)) (R, er
 	go func() {
 		defer func() {
 			if ePanic := recover(); ePanic != nil {
-				err = fmt.Errorf("task execution panicked: %v", ePanic)
+				err = fmt.Errorf("%w: %v", ErrTaskPanicked, ePanic)
 			}
 			done <- struct{}{}
 		}()
@@ -51,32 +51,16 @@ func execTask[R interface{}](ctx context.Context, call func() (R, error)) (R, er
 
 	select {
 	case <-ctx.Done():
-		return *(new(R)), fmt.Errorf("task execution cancelled: %w", ctx.Err())
+		return *(new(R)), fmt.Errorf("%w: %w", ErrTaskCancelled, ctx.Err())
 	case <-done:
 		return result, err
 	}
 }
 
-type taskResultError[R interface{}] struct {
-	fn func(ctx context.Context) (R, error)
-}
-
-func (t *taskResultError[R]) execute(ctx context.Context) (R, error) {
+// Run executes the task function with panic recovery and context cancellation.
+func (t Task[R]) Run(ctx context.Context) (R, error) {
 	return execTask[R](ctx, func() (R, error) { return t.fn(ctx) })
 }
 
-type taskResult[R interface{}] struct {
-	fn func(ctx context.Context) R
-}
-
-func (t *taskResult[R]) execute(ctx context.Context) (R, error) {
-	return execTask[R](ctx, func() (R, error) { return t.fn(ctx), nil })
-}
-
-type taskError[R interface{}] struct {
-	fn func(ctx context.Context) error
-}
-
-func (t *taskError[R]) execute(ctx context.Context) (R, error) {
-	return execTask[R](ctx, func() (R, error) { var zero R; return zero, t.fn(ctx) })
-}
+// SendResult reports whether a successful run should be forwarded to results.
+func (t Task[R]) SendResult() bool { return t._sendResult }

@@ -13,14 +13,14 @@ type concurrentWorkers[R any] struct {
 
 	once sync.Once
 
-	tasks   chan runnable[R]
+	tasks   chan workers.Task[R]
 	results chan R
 	errors  chan error
 }
 
 // newMT creates a new private multithreaded executor that does not preserve order.
 // Concurrency is config.MaxWorkers; if zero, defaults to runtime.NumCPU().
-func newMT[R any](ctx context.Context, config *workers.Config) workers.Workers[R] {
+func newMT[R any](ctx context.Context, config *workers.Config) testWorkers[R] {
 	if config == nil {
 		config = &workers.Config{}
 	}
@@ -32,7 +32,7 @@ func newMT[R any](ctx context.Context, config *workers.Config) workers.Workers[R
 	}
 	e := make(chan error, eCap)
 
-	tasks := make(chan runnable[R], config.TasksBufferSize)
+	tasks := make(chan workers.Task[R], config.TasksBufferSize)
 	if config.TasksBufferSize == 0 {
 		tasks = nil // to return error in AddTask until Start
 	}
@@ -59,7 +59,7 @@ func (w *concurrentWorkers[R]) Start(ctx context.Context) {
 		}
 
 		if w.tasks == nil {
-			w.tasks = make(chan runnable[R])
+			w.tasks = make(chan workers.Task[R])
 		}
 
 		workersN := int(w.config.MaxWorkers)
@@ -78,7 +78,7 @@ func (w *concurrentWorkers[R]) Start(ctx context.Context) {
 					case <-ctx.Done():
 						return
 					case t := <-w.tasks:
-						res, err := t.fn(ctx)
+						res, err := t.Run(ctx)
 						if err != nil {
 							w.errors <- err
 							if w.config.StopOnError && cancel != nil {
@@ -87,7 +87,7 @@ func (w *concurrentWorkers[R]) Start(ctx context.Context) {
 							}
 							continue
 						}
-						if t.sendResult {
+						if t.SendResult() {
 							w.results <- res
 						}
 					}
@@ -102,18 +102,14 @@ func (w *concurrentWorkers[R]) Start(ctx context.Context) {
 	})
 }
 
-func (w *concurrentWorkers[R]) AddTask(t interface{}) error {
-	r, err := makeRunnable[R](t)
-	if err != nil {
-		return err
-	}
+func (w *concurrentWorkers[R]) AddTask(t workers.Task[R]) error {
 	switch {
 	case w.tasks == nil:
 		return workers.ErrInvalidState
 	case cap(w.tasks) > 0 && len(w.tasks) == cap(w.tasks):
 		panic("tasks channel is full")
 	}
-	w.tasks <- r
+	w.tasks <- t
 	return nil
 }
 

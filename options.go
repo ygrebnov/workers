@@ -2,13 +2,15 @@ package workers
 
 import (
 	"context"
-	"fmt"
+
+	"github.com/ygrebnov/errorc"
 )
 
 // Option configures Workers. Use NewOptions(ctx, opts...) to construct Workers via options.
-type Option func(*configOptions)
+// Breaking change: Option now returns an error on invalid input instead of panicking.
+type Option func(*configOptions) error
 
-// internal builder state for options assembly.
+// Internal builder state for options assembly.
 type configOptions struct {
 	cfg          Config
 	poolSelected poolType
@@ -22,66 +24,83 @@ const (
 	poolFixed
 )
 
+var errFixedDynamicPoolOptionsConflict = errorc.With(
+	ErrInvalidWorkersOption,
+	errorc.String(
+		"",
+		"conflicting pool options: WithFixedPool and WithDynamicPool both specified",
+	),
+)
+
 // WithFixedPool selects a fixed-size worker pool with the given capacity (must be > 0).
 func WithFixedPool(n uint) Option {
-	return func(co *configOptions) {
+	return func(co *configOptions) error {
 		if co.poolSelected != poolUnspecified && co.poolSelected != poolFixed {
-			panic("conflicting pool options: WithFixedPool and WithDynamicPool both specified")
+			return errFixedDynamicPoolOptionsConflict
 		}
 		if n == 0 {
-			panic("WithFixedPool requires n > 0")
+			return errorc.With(ErrInvalidWorkersOption, errorc.String("", "WithFixedPool requires n > 0"))
 		}
 		co.poolSelected = poolFixed
 		co.cfg.MaxWorkers = n
+		return nil
 	}
 }
 
 // WithDynamicPool selects a dynamic-size worker pool (the default if no pool option is provided).
 func WithDynamicPool() Option {
-	return func(co *configOptions) {
+	return func(co *configOptions) error {
 		if co.poolSelected != poolUnspecified && co.poolSelected != poolDynamic {
-			panic("conflicting pool options: WithFixedPool and WithDynamicPool both specified")
+			return errFixedDynamicPoolOptionsConflict
 		}
 		co.poolSelected = poolDynamic
 		co.cfg.MaxWorkers = 0
+		return nil
 	}
 }
 
 // WithTasksBuffer sets the size of the tasks channel buffer.
 func WithTasksBuffer(size uint) Option {
-	return func(co *configOptions) { co.cfg.TasksBufferSize = size }
+	return func(co *configOptions) error { co.cfg.TasksBufferSize = size; return nil }
 }
 
 // WithResultsBuffer sets the size of the results channel buffer (default 1024).
 func WithResultsBuffer(size uint) Option {
-	return func(co *configOptions) { co.cfg.ResultsBufferSize = size }
+	return func(co *configOptions) error { co.cfg.ResultsBufferSize = size; return nil }
 }
 
 // WithErrorsBuffer sets the size of the outgoing errors channel buffer (default 1024).
 func WithErrorsBuffer(size uint) Option {
-	return func(co *configOptions) { co.cfg.ErrorsBufferSize = size }
+	return func(co *configOptions) error { co.cfg.ErrorsBufferSize = size; return nil }
 }
 
 // WithStopOnErrorBuffer sets the size of the internal errors buffer used when StopOnError is enabled (default 100).
 func WithStopOnErrorBuffer(size uint) Option {
-	return func(co *configOptions) { co.cfg.StopOnErrorErrorsBufferSize = size }
+	return func(co *configOptions) error { co.cfg.StopOnErrorErrorsBufferSize = size; return nil }
 }
 
 // WithStartImmediately starts workers execution immediately.
-func WithStartImmediately() Option { return func(co *configOptions) { co.cfg.StartImmediately = true } }
+func WithStartImmediately() Option {
+	return func(co *configOptions) error { co.cfg.StartImmediately = true; return nil }
+}
 
 // WithStopOnError stops tasks execution when the first error occurs.
-func WithStopOnError() Option { return func(co *configOptions) { co.cfg.StopOnError = true } }
+func WithStopOnError() Option {
+	return func(co *configOptions) error { co.cfg.StopOnError = true; return nil }
+}
 
 // NewOptions creates a new Workers instance using functional options.
-// It preserves backward compatibility by internally constructing a Config and delegating to New.
-func NewOptions[R interface{}](ctx context.Context, opts ...Option) Workers[R] {
+// Breaking change: returns (*Workers, error) instead of panicking on invalid options.
+// It preserves backward compatibility in behavior by internally constructing a Config and delegating to New.
+func NewOptions[R interface{}](ctx context.Context, opts ...Option) (*Workers[R], error) {
 	co := configOptions{cfg: defaultConfig(), poolSelected: poolUnspecified}
 	for _, opt := range opts {
 		if opt == nil {
-			panic("nil workers option")
+			continue
 		}
-		opt(&co)
+		if err := opt(&co); err != nil {
+			return nil, errorc.With(ErrInvalidWorkersOption, errorc.Error("", err))
+		}
 	}
 
 	// If pool type not specified, default to dynamic (same as MaxWorkers == 0 today).
@@ -91,14 +110,8 @@ func NewOptions[R interface{}](ctx context.Context, opts ...Option) Workers[R] {
 	}
 
 	if err := validateConfig(&co.cfg); err != nil {
-		panic(fmt.Errorf("invalid workers config: %w", err))
+		return nil, errorc.With(ErrInvalidWorkersConfig, errorc.Error("", err))
 	}
 
-	return New[R](ctx, &co.cfg)
-}
-
-// Deprecated: NewWithOptions will be removed in a future release.
-// Prefer NewOptions, which will be renamed to New (options-based) in the next major version.
-func NewWithOptions[R interface{}](ctx context.Context, opts ...Option) Workers[R] {
-	return NewOptions[R](ctx, opts...)
+	return New[R](ctx, &co.cfg), nil
 }

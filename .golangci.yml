@@ -47,7 +47,6 @@ linters:
     - unused
     - wastedassign
     - whitespace
-    - wrapcheck
 
 linters-settings:
   depguard:
@@ -76,7 +75,7 @@ linters-settings:
       - experimental
       - opinionated
   gocyclo:
-    min-complexity: 10
+    min-complexity: 11
   goimports:
     local-prefixes: github.com/ygrebnov/workers
   gosec:

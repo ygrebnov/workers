@@ -16,8 +16,8 @@ func TestHandleError(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, true, true, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 4, 5),
 			expectedErrors:  []string{"error executing task for: 3"},
@@ -29,8 +29,8 @@ func TestHandleError(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, true, true, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 4, 5),
 			expectedErrors:  []string{"error executing task for: 3"},
@@ -42,8 +42,8 @@ func TestHandleError(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, true, true, false))
 			},
 			expectedResults: append(
 				[]string{""},
@@ -58,8 +58,8 @@ func TestHandleError(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, true, true, false))
 			},
 			expectedResults: append(
 				[]string{""},
@@ -74,8 +74,8 @@ func TestHandleError(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, true, true, false))
 			},
 			expectedResults: []string{},
 			expectedErrors:  []string{"error executing task for: 3"},
@@ -87,8 +87,8 @@ func TestHandleError(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, true, true, false))
 			},
 			expectedResults: []string{},
 			expectedErrors:  []string{"error executing task for: 3"},
@@ -101,8 +101,8 @@ func TestHandleError(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, true, true, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 4, 5),
 			expectedErrors:  []string{"error executing task for: 3"},
@@ -115,8 +115,8 @@ func TestHandleError(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, true, true, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 4, 5),
 			expectedErrors:  []string{"error executing task for: 3"},
@@ -129,8 +129,8 @@ func TestHandleError(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, true, true, false))
 			},
 			expectedResults: append(
 				[]string{""},
@@ -146,8 +146,8 @@ func TestHandleError(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, true, true, false))
 			},
 			expectedResults: append(
 				[]string{""},
@@ -163,8 +163,8 @@ func TestHandleError(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, true, true, false))
 			},
 			expectedResults: []string{},
 			expectedErrors:  []string{"error executing task for: 3"},
@@ -177,8 +177,8 @@ func TestHandleError(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, true, true, false))
 			},
 			expectedResults: []string{},
 			expectedErrors:  []string{"error executing task for: 3"},
@@ -193,8 +193,8 @@ func TestHandleError(t *testing.T) {
 				StopOnError:      true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, true, true, false))
 			},
 			// expectedResults: getExpectedResults(1, 2),
 			expectedMaxResults: ptrInt(4),
@@ -208,8 +208,8 @@ func TestHandleError(t *testing.T) {
 				StopOnError:      true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, true, true, false))
 			},
 			// expectedResults: getExpectedResults(1, 2),
 			expectedMaxResults: ptrInt(4),
@@ -223,8 +223,8 @@ func TestHandleError(t *testing.T) {
 				StopOnError:      true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, true, true, false))
 			},
 			expectedResults: append(
 				[]string{""},
@@ -240,141 +240,14 @@ func TestHandleError(t *testing.T) {
 				StopOnError:      true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, true, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, true, true, false))
 			},
 			expectedResults: append(
 				[]string{""},
 				getExpectedResults(1, 2, 4, 5)..., // the error is not in the task signature.
 			),
 			expectedErrors: []string{},
-		},
-
-		{
-			name: "taskError_dynamic_startImmediately_stopOnError",
-			config: &workers.Config{
-				StartImmediately: true,
-				StopOnError:      true,
-			},
-			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, true, false)
-			},
-			expectedResults: []string{},
-			expectedErrors:  []string{"error executing task for: 3"},
-		},
-		{
-			name: "taskError_fixed_startImmediately_stopOnError",
-			config: &workers.Config{
-				MaxWorkers:       uint(runtime.NumCPU()),
-				StartImmediately: true,
-				StopOnError:      true,
-			},
-			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, true, false)
-			},
-			expectedResults: []string{},
-			expectedErrors:  []string{"error executing task for: 3"},
-		},
-
-		// delayed start, stop on error.
-		{
-			name: "taskStringError_dynamic_delayedStart_stopOnError",
-			config: &workers.Config{
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
-				StopOnError:     true,
-			},
-			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, true, false)
-			},
-			// expectedResults: getExpectedResults(1, 2),
-			expectedMaxResults: ptrInt(4),
-			expectedErrors:     []string{"error executing task for: 3"},
-			delayedStart:       true,
-		},
-		{
-			name: "taskStringError_fixed_delayedStart_stopOnError",
-			config: &workers.Config{
-				MaxWorkers:      uint(runtime.NumCPU()),
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
-				StopOnError:     true,
-			},
-			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, true, true, false)
-			},
-			// expectedResults: getExpectedResults(1, 2),
-			expectedMaxResults: ptrInt(4),
-			expectedErrors:     []string{"error executing task for: 3"},
-			delayedStart:       true,
-		},
-
-		{
-			name: "taskString_dynamic_delayedStart_stopOnError",
-			config: &workers.Config{
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
-				StopOnError:     true,
-			},
-			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, true, false)
-			},
-			expectedResults: append(
-				[]string{""},
-				getExpectedResults(1, 2, 4, 5)..., // the error is not in the task signature.
-			),
-			expectedErrors: []string{},
-			delayedStart:   true,
-		},
-		{
-			name: "taskString_fixed_delayedStart_stopOnError",
-			config: &workers.Config{
-				MaxWorkers:      uint(runtime.NumCPU()),
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
-				StopOnError:     true,
-			},
-			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, true, true, false)
-			},
-			expectedResults: append(
-				[]string{""},
-				getExpectedResults(1, 2, 4, 5)..., // the error is not in the task signature.
-			),
-			expectedErrors: []string{},
-			delayedStart:   true,
-		},
-
-		{
-			name: "taskError_dynamic_delayedStart_stopOnError",
-			config: &workers.Config{
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
-				StopOnError:     true,
-			},
-			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, true, false)
-			},
-			expectedResults: []string{},
-			expectedErrors:  []string{"error executing task for: 3"},
-			delayedStart:    true,
-		},
-		{
-			name: "taskError_fixed_delayedStart_stopOnError",
-			config: &workers.Config{
-				MaxWorkers:      uint(runtime.NumCPU()),
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
-				StopOnError:     true,
-			},
-			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, true, true, false)
-			},
-			expectedResults: []string{},
-			expectedErrors:  []string{"error executing task for: 3"},
-			delayedStart:    true,
 		},
 	}
 

@@ -2,88 +2,59 @@ package workers
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/ygrebnov/workers/pool"
 )
 
-// Config holds Workers configuration.
-type Config struct {
-	// MaxWorkers defines workers pool maximum size.
-	// Zero (default) means that the size will be set dynamically.
-	// Zero value is suitable for the majority of cases.
-	// Default: 0 (dynamic pool)
-	MaxWorkers uint
+// Workers manages a pool of workers executing typed tasks and exposing results/errors channels.
+// Workers is a concrete struct; methods are safe for concurrent use.
+// Zero-value is usable: call Start(ctx) to initialize with defaults (or construct via New/NewOptions).
+type Workers[R interface{}] struct {
+	// noCopy prevents accidental copying of the controller.
+	//go:nocopy
+	nc noCopy
 
-	// StartImmediately defines whether workers start executing tasks immediately or not.
-	// Default: false
-	StartImmediately bool
-
-	// StopOnError stops tasks execution if an error occurs.
-	// Default: false
-	StopOnError bool
-
-	// TasksBufferSize defines the size of the tasks channel buffer.
-	// Default: 0 (unbuffered)
-	TasksBufferSize uint
-
-	// ResultsBufferSize defines the size of the results channel buffer.
-	// Default: 1024.
-	ResultsBufferSize uint
-
-	// ErrorsBufferSize defines the size of the outgoing errors channel buffer.
-	// Default: 1024.
-	ErrorsBufferSize uint
-
-	// StopOnErrorErrorsBufferSize defines the size of the internal errors buffer used
-	// when StopOnError is enabled. Smaller buffer triggers cancellation quickly.
-	// Default: 100.
-	StopOnErrorErrorsBufferSize uint
-}
-
-// Workers is an interface that defines methods on Workers.
-type Workers[R interface{}] interface {
-	// Start starts the Workers and begins executing tasks.
-	// Start may be called only once.
-	// In case 'StopOnError' is set to true, tasks execution is stopped on error.
-	Start(context.Context)
-
-	// AddTask adds a task to the Workers queue.
-	// The task must be a function with one of the following signatures:
-	//
-	// * func(context.Context) (R, error),
-	//
-	// * func(context.Context) R,
-	//
-	// * func(context.Context) error.
-	//
-	// In case the Workers have been started, the task will be dispatched immediately and
-	// executed as soon as a worker is available.
-	AddTask(interface{}) error
-
-	// GetResults returns a channel to receive tasks execution results.
-	GetResults() chan R
-
-	// GetErrors returns a channel to receive tasks execution errors.
-	GetErrors() chan error
-}
-
-type workers[R interface{}] struct {
 	config *Config
 
-	once sync.Once
+	once      sync.Once
+	closeOnce sync.Once
 
+	// internal lifecycle control
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	// worker pool
 	pool pool.Pool
 
-	tasks   chan task[R]
+	// channels
+	tasks   chan Task[R]
 	results chan R
 	errors  chan error // outward errors channel
 
 	// When StopOnError is enabled, workers produce into this smaller internal buffer,
 	// which Start() drains and forwards into the outward errors channel, then cancels.
 	errorsBuf chan error
+
+	// in-flight tasks accounting (dispatch wrappers increment/decrement)
+	inflight sync.WaitGroup
+
+	// waits for the stop-on-error forwarder goroutine to exit before closing errors
+	forwarderWG sync.WaitGroup
+
+	// tracks detached sender goroutines that forward outward errors asynchronously
+	errorsSendWG sync.WaitGroup
+
+	// closed during Close to unblock any pending detached senders safely
+	closeCh chan struct{}
 }
+
+// noCopy is a vet-recognized marker to discourage copying types with this field embedded.
+// It works with the "-copylocks" analyzer via the presence of Lock/Unlock methods.
+type noCopy struct{}
+
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}
 
 // New creates a new Workers object instance and returns it.
 //
@@ -93,7 +64,7 @@ type workers[R interface{}] struct {
 // The Workers object is not started automatically.
 // To start it, either 'StartImmediately' configuration option must be set to true or
 // the Start method must be called explicitly.
-func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
+func New[R interface{}](ctx context.Context, config *Config) *Workers[R] {
 	if config == nil {
 		cfg := defaultConfig()
 		config = &cfg
@@ -124,12 +95,12 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 		p = pool.NewDynamic(newWorkerFn)
 	}
 
-	tasks := make(chan task[R], config.TasksBufferSize)
+	tasks := make(chan Task[R], config.TasksBufferSize)
 	if config.TasksBufferSize == 0 {
 		tasks = nil // to return error in AddTask.
 	}
 
-	w := &workers[R]{
+	w := &Workers[R]{
 		config:  config,
 		tasks:   tasks,
 		results: r,
@@ -153,66 +124,171 @@ func New[R interface{}](ctx context.Context, config *Config) Workers[R] {
 }
 
 // Start starts the Workers and begins executing tasks.
-func (w *workers[R]) Start(ctx context.Context) {
+func (w *Workers[R]) Start(ctx context.Context) {
 	w.once.Do(func() {
-		if w.tasks == nil {
-			w.tasks = make(chan task[R])
+		// If this instance was not constructed via New/NewOptions, lazily initialize defaults.
+		if w.config == nil {
+			cfg := defaultConfig()
+			w.config = &cfg
 		}
 
-		// If StopOnError is enabled, create a cancellable context and forward
-		// internal errors to the outward channel. Cancel first to stop scheduling
-		// new work; then forward the triggering error. If the outward channel is
-		// full, forward in a detached goroutine to avoid blocking cancellation.
-		if w.config.StopOnError {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithCancel(ctx)
-
-			go func(ctx context.Context) {
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case e := <-w.errorsBuf:
-						// Cancel first so dispatch loop stops promptly.
-						cancel()
-						// Best-effort, non-blocking forward; if full, forward asynchronously.
-						select {
-						case w.errors <- e:
-							// forwarded
-						default:
-							go func(err error) { w.errors <- err }(e)
-						}
-					}
-				}
-			}(ctx)
+		// Initialize results and errors channels if missing.
+		if w.results == nil {
+			w.results = make(chan R, w.config.ResultsBufferSize)
+		}
+		if w.errors == nil {
+			w.errors = make(chan error, w.config.ErrorsBufferSize)
 		}
 
-		go func(ctx context.Context) {
-			for {
-				select {
-				case <-ctx.Done():
-					w.tasks = nil
-					return
+		// For StopOnError, workers write to an internal buffer that is forwarded outward.
+		// Otherwise, workers write directly to the outward errors channel.
+		if w.config.StopOnError && w.errorsBuf == nil {
+			w.errorsBuf = make(chan error, w.config.StopOnErrorErrorsBufferSize)
+		}
 
-				case t := <-w.tasks:
-					go w.dispatch(ctx, t)
-				}
+		// Initialize pool if missing.
+		if w.pool == nil {
+			// Workers should write errors to errorsBuf if StopOnError, else directly to outward errors.
+			workerErrors := w.errors
+			if w.config.StopOnError {
+				workerErrors = w.errorsBuf
 			}
-		}(ctx)
+			newWorkerFn := func() interface{} { return newWorker(w.results, workerErrors) }
+			if w.config.MaxWorkers > 0 {
+				w.pool = pool.NewFixed(w.config.MaxWorkers, newWorkerFn)
+			} else {
+				w.pool = pool.NewDynamic(newWorkerFn)
+			}
+		}
+
+		// create internal context that Close() can cancel
+		w.ctx, w.cancel = context.WithCancel(ctx)
+
+		// initialize closeCh used to stop detached senders during Close
+		w.closeCh = make(chan struct{})
+
+		if w.tasks == nil {
+			w.tasks = make(chan Task[R])
+		}
+
+		// If StopOnError is enabled, forward internal errors to the outward channel.
+		if w.config.StopOnError {
+			w.forwardErrors()
+		}
+
+		go w.dispatchTasks(w.ctx)
 	})
 }
 
-var (
-	ErrInvalidState = errors.New("cannot add a task for non-started workers with unbuffered tasks channel")
-)
+func (w *Workers[R]) forwardErrors() {
+	w.forwarderWG.Add(1)
+	go func(ctx context.Context) {
+		defer w.forwarderWG.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e := <-w.errorsBuf:
+				// Cancel first so dispatch loop stops promptly.
+				w.cancel()
+				// Try immediate forward; if it would block, forward asynchronously with Close-aware cancellation.
+				select {
+				case w.errors <- e:
+					// forwarded synchronously
+				default:
+					w.errorsSendWG.Add(1)
+					go func(err error) {
+						defer w.errorsSendWG.Done()
+						select {
+						case w.errors <- err:
+							// delivered when reader appears
+						case <-w.closeCh:
+							// drop if closing
+						}
+					}(e)
+				}
+			}
+		}
+	}(w.ctx)
+}
+
+func (w *Workers[R]) dispatchTasks(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			// stop dispatcher without mutating w.tasks to avoid races
+			return
+
+		case t := <-w.tasks:
+			w.inflight.Add(1)
+			go func(tt Task[R]) {
+				defer w.inflight.Done()
+				w.dispatch(ctx, tt)
+			}(t)
+		}
+	}
+}
+
+// Close stops scheduling new work, waits for in-flight tasks to finish, then closes results and errors.
+//
+// Semantics:
+// - Idempotent and safe for concurrent use.
+// - Cancels the internal context created at Start, causing the dispatcher to stop.
+// - Waits for all in-flight task executions to complete.
+// - In StopOnError mode, drains any buffered internal errors and forwards them best-effort before closing.
+// - Finally closes results and errors channels owned by this instance.
+func (w *Workers[R]) Close() {
+	w.closeOnce.Do(func() {
+		// prevent further AddTask attempts from succeeding via context cancellation (no need to nil tasks)
+
+		// cancel internal context to stop dispatch and forwarder
+		if w.cancel != nil {
+			w.cancel()
+		}
+
+		// wait for in-flight tasks to finish
+		w.inflight.Wait()
+
+		// ensure forwarder stopped before closing outward errors
+		w.forwarderWG.Wait()
+
+		// signal detached senders to exit and wait for them
+		if w.closeCh != nil {
+			close(w.closeCh)
+		}
+		w.errorsSendWG.Wait()
+
+		// drain any remaining internal errors best-effort
+		w.drainInternalErrors()
+
+		close(w.results)
+		close(w.errors)
+	})
+}
+
+// drainInternalErrors forwards any buffered internal errors to the outward channel best-effort.
+// Non-blocking send; drops if saturated. Safe to call when errorsBuf is nil.
+func (w *Workers[R]) drainInternalErrors() {
+	if w.errorsBuf == nil {
+		return
+	}
+	for {
+		select {
+		case e := <-w.errorsBuf:
+			select {
+			case w.errors <- e:
+				// forwarded
+			default:
+				// drop
+			}
+		default:
+			return
+		}
+	}
+}
 
 // AddTask adds a task to the Workers queue.
-func (w *workers[R]) AddTask(t interface{}) error {
-	tt, err := newTask[R](t)
-	if err != nil {
-		return err
-	}
-
+func (w *Workers[R]) AddTask(t Task[R]) error {
 	switch {
 	case w.tasks == nil:
 		return ErrInvalidState
@@ -221,21 +297,34 @@ func (w *workers[R]) AddTask(t interface{}) error {
 		panic("tasks channel is full")
 	}
 
-	w.tasks <- tt
+	// If we've been started and the internal context is canceled, don't block; return ErrInvalidState.
+	if w.ctx != nil {
+		// If already canceled, fail fast deterministically.
+		if w.ctx.Err() != nil {
+			return ErrInvalidState
+		}
+		// Otherwise send, but remain cancellation-aware while sending (for unbuffered or saturated channel).
+		select {
+		case w.tasks <- t:
+			return nil
+		case <-w.ctx.Done():
+			return ErrInvalidState
+		}
+	}
+
+	// Not started yet (ctx is nil) but tasks channel exists (e.g., constructed with non-zero buffer).
+	// Fall back to a normal send.
+	w.tasks <- t
 	return nil
 }
 
 // GetResults returns a channel to receive tasks execution results.
-func (w *workers[R]) GetResults() chan R {
-	return w.results
-}
+func (w *Workers[R]) GetResults() chan R { return w.results }
 
 // GetErrors returns a channel to receive tasks execution errors.
-func (w *workers[R]) GetErrors() chan error {
-	return w.errors
-}
+func (w *Workers[R]) GetErrors() chan error { return w.errors }
 
-func (w *workers[R]) dispatch(ctx context.Context, t task[R]) {
+func (w *Workers[R]) dispatch(ctx context.Context, t Task[R]) {
 	ww := w.pool.Get().(*worker[R])
 	ww.execute(ctx, t)
 	w.pool.Put(ww)

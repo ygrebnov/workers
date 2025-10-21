@@ -16,8 +16,8 @@ func TestNominal(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, false, false, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
 		},
@@ -29,8 +29,8 @@ func TestNominal(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, false, false, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
 		},
@@ -41,8 +41,8 @@ func TestNominal(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, false, false, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
 		},
@@ -54,8 +54,8 @@ func TestNominal(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, false, false, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
 		},
@@ -66,8 +66,8 @@ func TestNominal(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, false, false, false))
 			},
 			expectedResults: []string{},
 		},
@@ -79,8 +79,8 @@ func TestNominal(t *testing.T) {
 				StartImmediately: true,
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, false, false, false))
 			},
 			expectedResults: []string{},
 		},
@@ -92,8 +92,8 @@ func TestNominal(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, false, false, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
 			delayedStart:    true,
@@ -106,8 +106,8 @@ func TestNominal(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskStringError(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskFunc[string](newTaskStringError(i, false, false, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
 			delayedStart:    true,
@@ -120,8 +120,8 @@ func TestNominal(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, false, false, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
 			delayedStart:    true,
@@ -134,8 +134,8 @@ func TestNominal(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskString(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskValue[string](newTaskString(i, false, false, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 3, 4, 5),
 			delayedStart:    true,
@@ -147,8 +147,8 @@ func TestNominal(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, false, false, false))
 			},
 			expectedResults: []string{},
 			delayedStart:    true,
@@ -160,8 +160,8 @@ func TestNominal(t *testing.T) {
 				TasksBufferSize: 5, // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
-			task: func(i int) interface{} {
-				return newTaskErr(i, false, false, false)
+			task: func(i int) workers.Task[string] {
+				return workers.TaskError[string](newTaskErr(i, false, false, false))
 			},
 			expectedResults: []string{},
 			delayedStart:    true,

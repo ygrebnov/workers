@@ -13,11 +13,12 @@ func TestDefaultsParity_New_vs_NewOptions(t *testing.T) {
 	ctx := context.Background()
 
 	w1 := workers.New[int](ctx, nil)
-	w2 := workers.NewOptions[int](ctx)
+	w2, err := workers.NewOptions[int](ctx)
+	require.NoError(t, err)
 
-	// By default StartImmediately is false and TasksBufferSize is 0.
+	// By default, StartImmediately is false and TasksBufferSize is 0.
 	// Adding a task before Start should return ErrInvalidState for both.
-	task := func(context.Context) int { return 42 }
+	task := workers.TaskValue[int](func(context.Context) int { return 42 })
 	require.ErrorIs(t, w1.AddTask(task), workers.ErrInvalidState)
 	require.ErrorIs(t, w2.AddTask(task), workers.ErrInvalidState)
 
