@@ -51,7 +51,7 @@ Unless overridden, a new instance uses:
 Options-based (recommended):
 
 ```go
-w := workers.NewOptions[string](
+w, err := workers.NewOptions[string](
     context.Background(),
     workers.WithDynamicPool(),
     workers.WithStartImmediately(),
@@ -59,6 +59,7 @@ w := workers.NewOptions[string](
     workers.WithResultsBuffer(2048),
     workers.WithErrorsBuffer(2048),
 )
+if err != nil { panic(err) }
 ```
 
 Equivalent with Config:
@@ -85,7 +86,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sync"
 
 	"github.com/ygrebnov/workers"
 )
@@ -104,40 +104,32 @@ func main() {
 	// Type parameter is used to specify the type of task result.
 	w := workers.New[string](context.Background(), &workers.Config{StartImmediately: true})
 
-	wg := sync.WaitGroup{}
-
-	// Receive and print results or handle errors in a separate goroutine.
-	go func() {
-		for range 10 {
-			select {
-			case result := <-w.GetResults():
-				fmt.Println(result)
-			case err := <-w.GetErrors():
-				fmt.Println("error executing task:", err)
-			}
-
-			wg.Done()
-		}
-	}()
-
+	// Enqueue ten tasks calculating the Fibonacci number for a given index.
 	for i := 20; i >= 11; i-- {
-		wg.Add(1)
-
-		// Add ten tasks calculating the Fibonacci number for a given index.
-		// A task is a function that takes a context and returns a string.
-		err := w.AddTask(func(ctx context.Context) string {
+		err := w.AddTask(workers.TaskValue[string](func(ctx context.Context) string {
 			return fmt.Sprintf("Calculated Fibonacci for: %d, result: %d.", i, fibonacci(i))
-		})
+		}))
 		if err != nil {
 			log.Fatalf("failed to add task: %v", err)
 		}
 	}
 
-	wg.Wait() // Wait for all tasks to finish.
+	// Close stops scheduling, waits for in-flight tasks to complete, and then
+	// closes both results and errors channels owned by this instance.
+	w.Close()
 
-	// Close channels.
-	close(w.GetResults())
-	close(w.GetErrors())
+	// Drain results and errors until both channels are closed.
+	resultsClosed, errorsClosed := false, false
+	for !(resultsClosed && errorsClosed) {
+		select {
+		case r, ok := <-w.GetResults():
+			if !ok { resultsClosed = true; continue }
+			fmt.Println(r)
+		case err, ok := <-w.GetErrors():
+			if !ok { errorsClosed = true; continue }
+			fmt.Println("error executing task:", err)
+		}
+	}
 }
 ```
 
@@ -152,6 +144,22 @@ Calculated Fibonacci for: 19, result: 4181.
 ...
 Calculated Fibonacci for: 11, result: 89.
 ```
+
+## Channels and Close
+- The library owns the Results and Errors channels. When you call Close(), it:
+  - cancels the internal context so no new work is dispatched,
+  - waits for in-flight tasks to finish,
+  - forwards any buffered internal errors (StopOnError) best-effort, and
+  - closes both channels.
+- Don’t close the channels yourself if you use Close(); Go panics on double-close.
+- Advanced: if you manage lifecycle manually and close channels yourself, do not call Close().
+
+### Stop-on-error (cancel-first) notes
+- With WithStopOnError:
+  - On the first error, the controller cancels promptly to stop scheduling new work.
+  - The triggering error is forwarded to the outward Errors channel. If the channel is full/no reader,
+    it’s forwarded via a detached goroutine and delivered once a reader appears. If Close() happens first,
+    pending errors may be dropped.
 
 ## Choosing between dynamic and fixed-size pool
 ### When a dynamic-size pool is a better fit
@@ -191,17 +199,19 @@ func main() {
     ctx := context.Background()
     // Limit calls to an external backend to at most 50 in flight.
     sem := make(chan struct{}, 50)
-    w := workers.NewOptions[error](
+    w, err := workers.NewOptions[error](
         ctx,
         workers.WithDynamicPool(),
         workers.WithStartImmediately(),
     )
-    _ = w.AddTask(func(ctx context.Context) error {
+    if err != nil { panic(err) }
+
+    _ = w.AddTask(workers.TaskError[error](func(ctx context.Context) error {
         sem <- struct{}{}            // acquire
         defer func() { <-sem }()     // release
         // Do I/O-bound work (HTTP/DB/etc.).
         return nil
-    })
+    }))
 }
 ```
 
@@ -212,7 +222,7 @@ package main
 import (
     "context"
     "runtime"
-	
+    
     "github.com/ygrebnov/workers"
 )
 
@@ -220,14 +230,16 @@ func cpuHeavy(n int) int { /* compute */ return n }
 func main() {
     ctx := context.Background()
     n := uint(runtime.NumCPU())
-    w := workers.NewOptions[int](
+    w, err := workers.NewOptions[int](
         ctx,
         workers.WithFixedPool(n),
         workers.WithStartImmediately(),
     )
-    _ = w.AddTask(func(ctx context.Context) int {
+    if err != nil { panic(err) }
+
+    _ = w.AddTask(workers.TaskValue[int](func(ctx context.Context) int {
         return cpuHeavy(42)
-    })
+    }))
 }
 ```
 
