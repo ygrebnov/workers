@@ -10,8 +10,6 @@ import (
 // Workers manages a pool of workers executing typed tasks and exposing results/errors channels.
 // Workers is a concrete struct; methods are safe for concurrent use.
 // Zero-value is usable: call Start(ctx) to initialize with defaults (or construct via New/NewOptions).
-//
-//nolint:revive // generic constraint uses interface{} for compatibility.
 type Workers[R interface{}] struct {
 	// noCopy prevents accidental copying of the controller.
 	//go:nocopy
