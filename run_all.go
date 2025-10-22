@@ -48,17 +48,19 @@ func newWorkersForRunAll[R any](
 func enqueueWrappedTasks[R any](w *Workers[R], tasks []Task[R], done chan struct{}) int {
 	wrap := func(t Task[R]) Task[R] {
 		if t.SendResult() {
-			return TaskFunc[R](func(c context.Context) (R, error) {
+			wrapped := TaskFunc[R](func(c context.Context) (R, error) {
 				r, e := t.Run(c)
 				done <- struct{}{}
 				return r, e
-			})
+			}).WithID(t.ID())
+			return wrapped
 		}
-		return TaskError[R](func(c context.Context) error {
+		wrapped := TaskError[R](func(c context.Context) error {
 			_, e := t.Run(c)
 			done <- struct{}{}
 			return e
-		})
+		}).WithID(t.ID())
+		return wrapped
 	}
 
 	started := 0
