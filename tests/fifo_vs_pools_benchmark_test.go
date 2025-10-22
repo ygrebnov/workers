@@ -122,6 +122,37 @@ func BenchmarkFIFO_vs_Pools_Matrix256_64Tasks(b *testing.B) {
 		})
 	})
 
+	// RunAll variants to measure orchestration overhead vs direct pool usage.
+	b.Run("run_all_fixed_NCPU", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithStartImmediately(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
+	})
+
+	b.Run("run_all_dynamic", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithDynamicPool(),
+				workers.WithStartImmediately(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
+	})
+
 	b.Run("mt_NCPU", func(b *testing.B) {
 		runBench[float64](b, tasks, func() testWorkers[float64] {
 			return newMT[float64](ctx, &workers.Config{MaxWorkers: uint(runtime.NumCPU()), StartImmediately: true})
@@ -156,6 +187,37 @@ func BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks(b *testing.B) {
 		runBench[float64](b, tasks, func() testWorkers[float64] {
 			return workers.New[float64](ctx, &workers.Config{StartImmediately: true})
 		})
+	})
+
+	// RunAll variants to measure orchestration overhead vs direct pool usage.
+	b.Run("run_all_fixed_NCPU", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithStartImmediately(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
+	})
+
+	b.Run("run_all_dynamic", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithDynamicPool(),
+				workers.WithStartImmediately(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
 	})
 
 	b.Run("mt_NCPU", func(b *testing.B) {
