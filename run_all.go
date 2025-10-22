@@ -13,7 +13,10 @@ import (
 // - If StopOnError is enabled in opts, cancellation is triggered on the first error; some tasks may not start.
 // - The returned error is errors.Join of all task errors (nil if no errors).
 func RunAll[R any](ctx context.Context, tasks []Task[R], opts ...Option) ([]R, error) {
-	w, done := newWorkersForRunAll[R](ctx, tasks, opts...)
+	w, done, err := newWorkersForRunAll[R](ctx, tasks, opts...)
+	if err != nil {
+		return nil, err
+	}
 
 	started := enqueueWrappedTasks[R](w, tasks, done)
 	waitCompletions(ctx, started, done)
@@ -27,20 +30,17 @@ func RunAll[R any](ctx context.Context, tasks []Task[R], opts ...Option) ([]R, e
 // It returns the instance and a completion channel sized to the number of tasks.
 func newWorkersForRunAll[R any](
 	ctx context.Context, tasks []Task[R], opts ...Option,
-) (w *Workers[R], done chan struct{}) {
+) (w *Workers[R], done chan struct{}, err error) {
 	// Ensure internal StopOnError buffer is large enough to avoid worker send blocking after cancellation.
 	opts = append(opts, WithStopOnErrorBuffer(uint(len(tasks))))
 
-	var err error
 	w, err = NewOptions[R](ctx, opts...)
 	if err != nil {
-		// To keep RunAll simple, panic here; NewOptions returns config errors only.
-		// Tests exercise NewOptions separately.
-		panic(err)
+		return nil, nil, err
 	}
 	w.Start(ctx)
 	done = make(chan struct{}, len(tasks))
-	return w, done
+	return w, done, nil
 }
 
 // enqueueWrappedTasks wraps each task to signal completion and enqueues until AddTask fails.
