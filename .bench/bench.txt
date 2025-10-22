@@ -1,0 +1,22 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/ygrebnov/workers/tests
+cpu: Apple M1
+BenchmarkFIFO_vs_Pools_Matrix256_64Tasks/fifo-8         	       2	 589832042 ns/op	100715080 B/op	     536 allocs/op
+BenchmarkFIFO_vs_Pools_Matrix256_64Tasks/fixed_NCPU-8   	       8	 127627781 ns/op	100706468 B/op	     746 allocs/op
+BenchmarkFIFO_vs_Pools_Matrix256_64Tasks/dynamic-8      	       8	 126777136 ns/op	100709105 B/op	     791 allocs/op
+BenchmarkFIFO_vs_Pools_Matrix256_64Tasks/dynamic_preserve_order-8         	       9	 127100102 ns/op	100706708 B/op	     781 allocs/op
+BenchmarkFIFO_vs_Pools_Matrix256_64Tasks/run_all_fixed_NCPU-8             	       9	 127532699 ns/op	100742232 B/op	    1081 allocs/op
+BenchmarkFIFO_vs_Pools_Matrix256_64Tasks/run_all_dynamic-8                	       8	 129159120 ns/op	100753536 B/op	    1157 allocs/op
+BenchmarkFIFO_vs_Pools_Matrix256_64Tasks/run_all_dynamic_preserve_order-8 	       8	 128174776 ns/op	100797294 B/op	    1168 allocs/op
+BenchmarkFIFO_vs_Pools_Matrix256_64Tasks/mt_NCPU-8                        	       8	 129192646 ns/op	100709446 B/op	     533 allocs/op
+BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks/fifo-8                           	       3	 373914222 ns/op	268481168 B/op	     397 allocs/op
+BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks/fixed_NCPU-8                     	      14	  72708095 ns/op	268467851 B/op	     583 allocs/op
+BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks/dynamic-8                        	      16	  73405276 ns/op	268475827 B/op	     646 allocs/op
+BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks/dynamic_preserve_order-8         	      16	  72678883 ns/op	268477513 B/op	     650 allocs/op
+BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks/run_all_fixed_NCPU-8             	      16	  72397331 ns/op	268515764 B/op	     965 allocs/op
+BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks/run_all_dynamic-8                	      15	  72454769 ns/op	268526173 B/op	    1030 allocs/op
+BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks/run_all_dynamic_preserve_order-8 	      15	  71479414 ns/op	268569220 B/op	    1043 allocs/op
+BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks/mt_NCPU-8                        	      14	  72733747 ns/op	268481608 B/op	     405 allocs/op
+PASS
+ok  	github.com/ygrebnov/workers/tests	22.184s
