@@ -18,7 +18,6 @@ func TestRunAll_HappyPath(t *testing.T) {
 	tasks := make([]workers.Task[int], 0, n)
 	expected := make([]int, 0, n)
 	for i := 1; i <= n; i++ {
-		i := i
 		tasks = append(tasks, workers.TaskValue[int](func(ctx context.Context) int { return i * 2 }))
 		expected = append(expected, i*2)
 	}
