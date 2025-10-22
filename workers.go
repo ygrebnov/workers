@@ -3,6 +3,7 @@ package workers
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ygrebnov/workers/pool"
 )
@@ -47,6 +48,13 @@ type Workers[R interface{}] struct {
 
 	// closed during Close to unblock any pending detached senders safely
 	closeCh chan struct{}
+
+	// sequence counter for tasks accepted via AddTask (used for error tagging and preserve-order indexing)
+	seq uint64
+
+	// preserve-order internal events stream and coordinator waitgroup
+	events    chan completionEvent[R]
+	reorderWG sync.WaitGroup
 }
 
 // noCopy is a vet-recognized marker to discourage copying types with this field embedded.
@@ -86,7 +94,15 @@ func New[R interface{}](ctx context.Context, config *Config) *Workers[R] {
 		workerErrors = make(chan error, config.ErrorsBufferSize)
 	}
 
-	newWorkerFn := func() interface{} { return newWorker(r, workerErrors) }
+	// Prepare preserve-order events channel if enabled.
+	var events chan completionEvent[R]
+	if config.PreserveOrder {
+		events = make(chan completionEvent[R], config.ResultsBufferSize)
+	}
+
+	newWorkerFn := func() interface{} {
+		return newWorker(r, workerErrors, config.ErrorTagging, config.PreserveOrder, events)
+	}
 
 	var p pool.Pool
 	if config.MaxWorkers > 0 {
@@ -105,6 +121,7 @@ func New[R interface{}](ctx context.Context, config *Config) *Workers[R] {
 		tasks:   tasks,
 		results: r,
 		pool:    p,
+		events:  events,
 	}
 
 	if config.StopOnError {
@@ -126,107 +143,183 @@ func New[R interface{}](ctx context.Context, config *Config) *Workers[R] {
 // Start starts the Workers and begins executing tasks.
 func (w *Workers[R]) Start(ctx context.Context) {
 	w.once.Do(func() {
-		// If this instance was not constructed via New/NewOptions, lazily initialize defaults.
-		if w.config == nil {
-			cfg := defaultConfig()
-			w.config = &cfg
-		}
-
-		// Initialize results and errors channels if missing.
-		if w.results == nil {
-			w.results = make(chan R, w.config.ResultsBufferSize)
-		}
-		if w.errors == nil {
-			w.errors = make(chan error, w.config.ErrorsBufferSize)
-		}
-
-		// For StopOnError, workers write to an internal buffer that is forwarded outward.
-		// Otherwise, workers write directly to the outward errors channel.
-		if w.config.StopOnError && w.errorsBuf == nil {
-			w.errorsBuf = make(chan error, w.config.StopOnErrorErrorsBufferSize)
-		}
-
-		// Initialize pool if missing.
-		if w.pool == nil {
-			// Workers should write errors to errorsBuf if StopOnError, else directly to outward errors.
-			workerErrors := w.errors
-			if w.config.StopOnError {
-				workerErrors = w.errorsBuf
-			}
-			newWorkerFn := func() interface{} { return newWorker(w.results, workerErrors) }
-			if w.config.MaxWorkers > 0 {
-				w.pool = pool.NewFixed(w.config.MaxWorkers, newWorkerFn)
-			} else {
-				w.pool = pool.NewDynamic(newWorkerFn)
-			}
-		}
-
-		// create internal context that Close() can cancel
-		w.ctx, w.cancel = context.WithCancel(ctx)
-
-		// initialize closeCh used to stop detached senders during Close
-		w.closeCh = make(chan struct{})
-
-		if w.tasks == nil {
-			w.tasks = make(chan Task[R])
-		}
-
-		// If StopOnError is enabled, forward internal errors to the outward channel.
-		if w.config.StopOnError {
-			w.forwardErrors()
-		}
-
-		go w.dispatchTasks(w.ctx)
+		w.initDefaultsIfNeeded()
+		w.initChannelsIfNeeded()
+		w.initPoolIfNeeded()
+		w.initContext(ctx)
+		w.startErrorForwarderIfNeeded()
+		w.startReordererIfNeeded()
+		w.startDispatcher(w.ctx)
 	})
 }
 
-func (w *Workers[R]) forwardErrors() {
+// initDefaultsIfNeeded ensures config exists.
+func (w *Workers[R]) initDefaultsIfNeeded() {
+	if w.config == nil {
+		cfg := defaultConfig()
+		w.config = &cfg
+	}
+}
+
+// initChannelsIfNeeded initializes results/errors/errorsBuf/tasks channels as needed.
+func (w *Workers[R]) initChannelsIfNeeded() {
+	if w.results == nil {
+		w.results = make(chan R, w.config.ResultsBufferSize)
+	}
+	if w.errors == nil {
+		w.errors = make(chan error, w.config.ErrorsBufferSize)
+	}
+	if w.config.StopOnError && w.errorsBuf == nil {
+		w.errorsBuf = make(chan error, w.config.StopOnErrorErrorsBufferSize)
+	}
+	if w.tasks == nil {
+		w.tasks = make(chan Task[R])
+	}
+	if w.config.PreserveOrder && w.events == nil {
+		w.events = make(chan completionEvent[R], w.config.ResultsBufferSize)
+	}
+}
+
+// initPoolIfNeeded sets up the pool, wiring worker errors to either errorsBuf or errors.
+func (w *Workers[R]) initPoolIfNeeded() {
+	if w.pool != nil {
+		return
+	}
+	workerErrors := w.errors
+	if w.config.StopOnError {
+		workerErrors = w.errorsBuf
+	}
+	newWorkerFn := func() interface{} {
+		return newWorker(w.results, workerErrors, w.config.ErrorTagging, w.config.PreserveOrder, w.events)
+	}
+	if w.config.MaxWorkers > 0 {
+		w.pool = pool.NewFixed(w.config.MaxWorkers, newWorkerFn)
+	} else {
+		w.pool = pool.NewDynamic(newWorkerFn)
+	}
+}
+
+// initContext creates the internal context and close channel.
+func (w *Workers[R]) initContext(ctx context.Context) {
+	w.ctx, w.cancel = context.WithCancel(ctx)
+	w.closeCh = make(chan struct{})
+}
+
+// startErrorForwarderIfNeeded launches the StopOnError forwarder goroutine if enabled.
+func (w *Workers[R]) startErrorForwarderIfNeeded() {
+	if !w.config.StopOnError {
+		return
+	}
 	w.forwarderWG.Add(1)
-	go func(ctx context.Context) {
+	go func() {
 		defer w.forwarderWG.Done()
+		forwardedFirst := false
 		for {
 			select {
-			case <-ctx.Done():
-				return
 			case e := <-w.errorsBuf:
 				// Cancel first so dispatch loop stops promptly.
 				w.cancel()
-				// Try immediate forward; if it would block, forward asynchronously with Close-aware cancellation.
-				select {
-				case w.errors <- e:
-					// forwarded synchronously
-				default:
-					w.errorsSendWG.Add(1)
-					go func(err error) {
-						defer w.errorsSendWG.Done()
-						select {
-						case w.errors <- err:
-							// delivered when reader appears
-						case <-w.closeCh:
-							// drop if closing
-						}
-					}(e)
+				if !forwardedFirst {
+					// Forward only the first error outward.
+					forwardedFirst = true
+					select {
+					case w.errors <- e:
+						// forwarded synchronously
+					default:
+						w.errorsSendWG.Add(1)
+						go func(err error) {
+							defer w.errorsSendWG.Done()
+							select {
+							case w.errors <- err:
+								// delivered when reader appears
+							case <-w.closeCh:
+								// drop if closing
+							}
+						}(e)
+					}
+				}
+			case <-w.closeCh:
+				// Drain any remaining internal errors (drop them), then exit.
+				for {
+					select {
+					case <-w.errorsBuf:
+						// drop
+					default:
+						return
+					}
 				}
 			}
 		}
-	}(w.ctx)
+	}()
 }
 
-func (w *Workers[R]) dispatchTasks(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			// stop dispatcher without mutating w.tasks to avoid races
-			return
-
-		case t := <-w.tasks:
-			w.inflight.Add(1)
-			go func(tt Task[R]) {
-				defer w.inflight.Done()
-				w.dispatch(ctx, tt)
-			}(t)
-		}
+// startReordererIfNeeded launches the preserve-order reorder coordinator when enabled.
+func (w *Workers[R]) startReordererIfNeeded() {
+	if !w.config.PreserveOrder {
+		return
 	}
+	w.reorderWG.Add(1)
+	go func() {
+		defer w.reorderWG.Done()
+		next := 0
+		buf := make(map[int]R)
+		seenNoRes := make(map[int]struct{})
+		for ev := range w.events {
+			if ev.present {
+				buf[ev.idx] = ev.val
+			} else {
+				seenNoRes[ev.idx] = struct{}{}
+			}
+			for {
+				if v, ok := buf[next]; ok {
+					w.results <- v
+					delete(buf, next)
+					next++
+					continue
+				}
+				if _, ok := seenNoRes[next]; ok {
+					delete(seenNoRes, next)
+					next++
+					continue
+				}
+				break
+			}
+		}
+		// best-effort flush contiguous tail after events closed
+		for {
+			if v, ok := buf[next]; ok {
+				w.results <- v
+				delete(buf, next)
+				next++
+				continue
+			}
+			if _, ok := seenNoRes[next]; ok {
+				delete(seenNoRes, next)
+				next++
+				continue
+			}
+			break
+		}
+	}()
+}
+
+// startDispatcher launches the task dispatcher loop.
+func (w *Workers[R]) startDispatcher(ctx context.Context) {
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				// stop dispatcher without mutating w.tasks to avoid races
+				return
+			case t := <-w.tasks:
+				w.inflight.Add(1)
+				go func(tt Task[R]) {
+					defer w.inflight.Done()
+					w.dispatch(ctx, tt)
+				}(t)
+			}
+		}
+	}(ctx)
 }
 
 // Close stops scheduling new work, waits for in-flight tasks to finish, then closes results and errors.
@@ -241,7 +334,7 @@ func (w *Workers[R]) Close() {
 	w.closeOnce.Do(func() {
 		// prevent further AddTask attempts from succeeding via context cancellation (no need to nil tasks)
 
-		// cancel internal context to stop dispatch and forwarder
+		// cancel internal context to stop dispatch
 		if w.cancel != nil {
 			w.cancel()
 		}
@@ -249,17 +342,24 @@ func (w *Workers[R]) Close() {
 		// wait for in-flight tasks to finish
 		w.inflight.Wait()
 
-		// ensure forwarder stopped before closing outward errors
-		w.forwarderWG.Wait()
-
-		// signal detached senders to exit and wait for them
+		// signal detached senders and forwarder to exit, then wait for them
 		if w.closeCh != nil {
 			close(w.closeCh)
 		}
+
+		// ensure forwarder stopped before closing outward errors
+		w.forwarderWG.Wait()
+
 		w.errorsSendWG.Wait()
 
 		// drain any remaining internal errors best-effort
 		w.drainInternalErrors()
+
+		// close reorder events and wait coordinator before closing outward results
+		if w.events != nil {
+			close(w.events)
+			w.reorderWG.Wait()
+		}
 
 		close(w.results)
 		close(w.errors)
@@ -292,9 +392,18 @@ func (w *Workers[R]) AddTask(t Task[R]) error {
 	switch {
 	case w.tasks == nil:
 		return ErrInvalidState
-
 	case cap(w.tasks) > 0 && len(w.tasks) == cap(w.tasks):
 		panic("tasks channel is full")
+	}
+
+	// Assign input index when either error tagging or preserve-order are enabled.
+	if w.config != nil && (w.config.ErrorTagging || w.config.PreserveOrder) {
+		idx := int(atomic.AddUint64(&w.seq, 1) - 1)
+		t = t.WithIndex(idx)
+		if w.config.ErrorTagging {
+			// wrap to propagate tagging on the error path
+			t = wrapTaskWithTagging(t, idx)
+		}
 	}
 
 	// If we've been started and the internal context is canceled, don't block; return ErrInvalidState.
@@ -328,4 +437,28 @@ func (w *Workers[R]) dispatch(ctx context.Context, t Task[R]) {
 	ww := w.pool.Get().(*worker[R])
 	ww.execute(ctx, t)
 	w.pool.Put(ww)
+}
+
+// wrapTaskWithTagging returns a Task that executes the original and wraps any error
+// with task ID and input index metadata for correlation.
+func wrapTaskWithTagging[R interface{}](t Task[R], index int) Task[R] {
+	origID := t.ID()
+	wrap := TaskFunc[R](func(ctx context.Context) (R, error) {
+		res, err := t.Run(ctx)
+		if err != nil {
+			return res, newTaskTaggedError(err, origID, index)
+		}
+		return res, nil
+	})
+	// Preserve SendResult and ID semantics
+	if !t.SendResult() {
+		wrap = TaskError[R](func(ctx context.Context) error {
+			_, err := t.Run(ctx)
+			if err != nil {
+				return newTaskTaggedError(err, origID, index)
+			}
+			return nil
+		})
+	}
+	return wrap.WithID(origID)
 }
