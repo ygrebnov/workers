@@ -151,19 +151,19 @@ Calculated Fibonacci for: 11, result: 89.
 
 ## Channels and Close
 - The library owns the Results and Errors channels. When you call Close(), it:
-  - cancels the internal context so no new work is dispatched,
-  - waits for in-flight tasks to finish,
-  - forwards any buffered internal errors (StopOnError) best-effort, and
-  - closes both channels.
+    - cancels the internal context so no new work is dispatched,
+    - waits for in-flight tasks to finish,
+    - forwards any buffered internal errors (StopOnError) best-effort, and
+    - closes both channels.
 - Don’t close the channels yourself if you use Close(); Go panics on double-close.
 - Advanced: if you manage lifecycle manually and close channels yourself, do not call Close().
 
 ### Stop-on-error (cancel-first) notes
 - With WithStopOnError:
-  - On the first error, the controller cancels promptly to stop scheduling new work.
-  - The triggering error is forwarded to the outward Errors channel. If the channel is full/no reader,
-    it’s forwarded via a detached goroutine and delivered once a reader appears. If Close() happens first,
-    pending errors may be dropped.
+    - On the first error, the controller cancels promptly to stop scheduling new work.
+    - The triggering error is forwarded to the outward Errors channel. If the channel is full/no reader,
+      it’s forwarded via a detached goroutine and delivered once a reader appears. If Close() happens first,
+      pending errors may be dropped.
 
 ### StopOnError forwarding semantics (buffered vs unbuffered)
 
@@ -173,7 +173,7 @@ This note documents how StopOnError forwards the first error and cancels schedul
 When `WithStopOnError()` is enabled:
 - On the first error produced by any worker, the controller cancels promptly (cancel-first), which stops further task scheduling and lets in-flight tasks observe `ctx.Done()`.
 - The triggering error is then forwarded to the outward errors channel.
-- If the outward channel cannot accept the error immediately, the controller uses a detached goroutine to deliver the error when a reader eventually appears. If `Close()` occurs first, the pending send is signaled to exit and the error may be dropped (best-effort delivery).
+- If the outward channel cannot accept the error immediately, the controller uses a detached goroutine to deliver the error when a reader eventually appears. If `Close()` occurs first, the pending detached send is signaled to exit and the error may be dropped (best-effort delivery).
 - After cancellation, `AddTask` returns `ErrInvalidState` deterministically and never blocks.
 
 #### Internal vs outward buffers
@@ -215,12 +215,65 @@ Example:
 - Use an unbuffered outward errors channel when you need strict backpressure (readers must be present to receive). Know that delivery is best-effort if `Close()` happens before a reader appears.
 - Keep `StopOnErrorErrorsBufferSize` small to propagate cancellation quickly under error bursts; increase only if you expect brief spikes before a reader drains.
 
-#### Tests guaranteeing behavior
-- Buffered outward path: `TestStart_StopOnError_BufferedOutward_SynchronousForward`.
-- Unbuffered outward path: `TestStart_StopOnError_UnbufferedOutward_AsyncForward`.
-- Post-cancellation AddTask returns `ErrInvalidState`:
-    - Buffered outward: `TestAddTask_ReturnsInvalidState_AfterStopOnErrorCancellation`.
-    - Unbuffered outward: `TestAddTask_ReturnsInvalidState_AfterStopOnErrorCancellation_UnbufferedOutward`.
+---
+
+## Preserve order (WithPreserveOrder)
+
+Enable deterministic, input-order delivery of results by adding `workers.WithPreserveOrder()` when constructing Workers. When enabled, the outward results channel emits results in the same order as tasks were added (by input index), not by completion time.
+
+### Usage
+
+```go
+w, err := workers.NewOptions[int](
+    ctx,
+    workers.WithDynamicPool(),
+    workers.WithStartImmediately(),
+    workers.WithPreserveOrder(),
+)
+if err != nil { panic(err) }
+
+// Add mixed-duration tasks in any order; results will be emitted by input index.
+_ = w.AddTask(workers.TaskValue[int](func(ctx context.Context) int { /* ... */ return 1 }))
+// ...
+```
+
+Applies to all APIs using the core Workers controller (including helpers like `RunAll` that forward options).
+
+### What is considered a "result"
+- A task contributes a result only if it returns `err == nil` and `SendResult() == true` (i.e., created via `TaskValue` or a `TaskFunc` that signals result emission).
+- Tasks created with `TaskError` (no outward result) or tasks that return an error do not emit a value to the results channel. They still generate an internal completion event so ordering can advance past their index without emitting a value.
+
+### How it works (high level)
+- Each task is assigned an input index on `AddTask`.
+- Workers emit a completion event for every executed task:
+    - present=true with the value when the task succeeded and wants to send a result.
+    - present=false when the task failed or is a no-result task.
+- A coordinator buffers out-of-order completions and only emits to `GetResults()` when the next index is available; it skips indices with `present=false`.
+
+### Trade-offs
+- Head-of-line blocking: if task i is slow and completes after task i+K, results for indices > i are held until i completes (or is seen as no-result/error). This can reduce throughput when completion times are skewed.
+- Buffering and memory: out-of-order completions are buffered. The internal events channel is sized by `ResultsBufferSize`. Under skew, memory usage grows with the number of completed but not-yet-emittable results. When buffers fill, workers block on sending completion events, applying backpressure to execution.
+- Extra coordination: one additional goroutine coordinates reordering when enabled. When disabled, there is no coordination overhead.
+
+### Interaction with StopOnError
+- Cancel-first: on the first error, `WithStopOnError()` cancels scheduling. Some later tasks may never start and therefore never produce a completion event.
+- Contiguous prefix only: because ordering must advance index-by-index, the coordinator can only emit a contiguous prefix of results up to the first index for which it never receives a completion event (e.g., a never-started task). Results after that point are not emitted, and the results channel closes after cleanup.
+- Error delivery: errors are still sent on `GetErrors()` per normal StopOnError semantics. A task that both intended to send a result and returned an error does not emit a result; the coordinator advances past its index due to the completion event with `present=false`.
+
+### Interaction with no-result tasks
+- Tasks created with `TaskError` (or any task where `SendResult()==false`) still participate in ordering by emitting a completion event with `present=false`. The coordinator immediately advances past those indices without emitting a value.
+- This means ordering is defined over the subset of tasks that actually produce results. You get values in input order for successful, result-producing tasks; no-result tasks simply create "gaps" that are skipped.
+
+### Guidance
+- Use `WithPreserveOrder` when consumers require input-order determinism (e.g., mapping inputs to outputs by position).
+- Prefer leaving it disabled when fastest-first delivery is desirable (e.g., streaming pipelines that benefit from early results).
+- Tune `ResultsBufferSize` to balance memory and throughput under skew; larger buffers allow more in-flight out-of-order completions before backpressure engages.
+
+### Close and lifecycle
+- `Close()` waits for in-flight tasks to finish, then closes the internal events stream and the coordinator drains any remaining contiguous tail before exiting, after which results and errors channels are closed.
+- In StopOnError scenarios, because some indices may never produce events, only the contiguous prefix of results will be observed before channels close.
+
+---
 
 ## Choosing between dynamic and fixed-size pool
 ### When a dynamic-size pool is a better fit
@@ -244,7 +297,7 @@ Example:
 - CPU-bound math/heavy memory compute: fixed-size pool with MaxWorkers ≈ runtime.NumCPU().
 - Bursty workload where latency during peaks matters: dynamic-size pool.
 - Integrating with a bounded backend (DB/API): fixed-size pool sized to backend limits (or dynamic + explicit semaphore with the same cap).
-  
+
 ### Snippets
 
 Dynamic + explicit limiter for I/O-bound tasks
