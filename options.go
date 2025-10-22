@@ -89,6 +89,11 @@ func WithStopOnError() Option {
 	return func(co *configOptions) error { co.cfg.StopOnError = true; return nil }
 }
 
+// WithErrorTagging enables wrapping task errors with task metadata (ID and index).
+func WithErrorTagging() Option {
+	return func(co *configOptions) error { co.cfg.ErrorTagging = true; return nil }
+}
+
 // NewOptions creates a new Workers instance using functional options.
 // Breaking change: returns (*Workers, error) instead of panicking on invalid options.
 // It preserves backward compatibility in behavior by internally constructing a Config and delegating to New.

@@ -3,6 +3,7 @@ package workers
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ygrebnov/workers/pool"
 )
@@ -47,6 +48,9 @@ type Workers[R interface{}] struct {
 
 	// closed during Close to unblock any pending detached senders safely
 	closeCh chan struct{}
+
+	// sequence counter for tasks accepted via AddTask (used for error tagging)
+	seq uint64
 }
 
 // noCopy is a vet-recognized marker to discourage copying types with this field embedded.
@@ -318,6 +322,12 @@ func (w *Workers[R]) AddTask(t Task[R]) error {
 		panic("tasks channel is full")
 	}
 
+	// Apply error-tagging wrapper if enabled, capturing a sequence index.
+	if w.config != nil && w.config.ErrorTagging {
+		idx := int(atomic.AddUint64(&w.seq, 1) - 1)
+		t = wrapTaskWithTagging(t, idx)
+	}
+
 	// If we've been started and the internal context is canceled, don't block; return ErrInvalidState.
 	if w.ctx != nil {
 		// If already canceled, fail fast deterministically.
@@ -349,4 +359,28 @@ func (w *Workers[R]) dispatch(ctx context.Context, t Task[R]) {
 	ww := w.pool.Get().(*worker[R])
 	ww.execute(ctx, t)
 	w.pool.Put(ww)
+}
+
+// wrapTaskWithTagging returns a Task that executes the original and wraps any error
+// with task ID and input index metadata for correlation.
+func wrapTaskWithTagging[R interface{}](t Task[R], index int) Task[R] {
+	origID := t.ID()
+	wrap := TaskFunc[R](func(ctx context.Context) (R, error) {
+		res, err := t.Run(ctx)
+		if err != nil {
+			return res, newTaskTaggedError(err, origID, index)
+		}
+		return res, nil
+	})
+	// Preserve SendResult and ID semantics
+	if !t.SendResult() {
+		wrap = TaskError[R](func(ctx context.Context) error {
+			_, err := t.Run(ctx)
+			if err != nil {
+				return newTaskTaggedError(err, origID, index)
+			}
+			return nil
+		})
+	}
+	return wrap.WithID(origID)
 }

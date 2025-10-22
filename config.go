@@ -32,6 +32,11 @@ type Config struct {
 	// when StopOnError is enabled. Smaller buffer triggers cancellation quickly.
 	// Default: 100.
 	StopOnErrorErrorsBufferSize uint
+
+	// ErrorTagging enables wrapping task errors with task metadata (ID and index).
+	// When enabled, any error returned by a task is wrapped to support correlation.
+	// Default: false (disabled).
+	ErrorTagging bool
 }
 
 // defaultConfig centralizes default values for Config.
@@ -45,6 +50,7 @@ func defaultConfig() Config {
 		ResultsBufferSize:           1024,
 		ErrorsBufferSize:            1024,
 		StopOnErrorErrorsBufferSize: 100,
+		ErrorTagging:                false,
 	}
 }
 
