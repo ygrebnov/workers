@@ -46,26 +46,25 @@ func newWorkersForRunAll[R any](
 // enqueueWrappedTasks wraps each task to signal completion and enqueues until AddTask fails.
 // It returns the number of tasks that actually started.
 func enqueueWrappedTasks[R any](w *Workers[R], tasks []Task[R], done chan struct{}) int {
-	wrap := func(t Task[R]) Task[R] {
-		if t.SendResult() {
-			wrapped := TaskFunc[R](func(c context.Context) (R, error) {
-				r, e := t.Run(c)
-				done <- struct{}{}
-				return r, e
-			}).WithID(t.ID())
-			return wrapped
-		}
-		wrapped := TaskError[R](func(c context.Context) error {
-			_, e := t.Run(c)
-			done <- struct{}{}
-			return e
-		}).WithID(t.ID())
-		return wrapped
-	}
-
 	started := 0
 	for _, t := range tasks {
-		if err := w.AddTask(wrap(t)); err != nil {
+		taskToRun := t // Capture loop variable.
+		var wrappedTask Task[R]
+		if taskToRun.SendResult() {
+			wrappedTask = TaskFunc[R](func(c context.Context) (R, error) {
+				r, e := taskToRun.Run(c)
+				done <- struct{}{}
+				return r, e
+			}).WithID(taskToRun.ID())
+		} else {
+			wrappedTask = TaskError[R](func(c context.Context) error {
+				_, e := taskToRun.Run(c)
+				done <- struct{}{}
+				return e
+			}).WithID(taskToRun.ID())
+		}
+
+		if err := w.AddTask(wrappedTask); err != nil {
 			break
 		}
 		started++
