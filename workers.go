@@ -173,10 +173,67 @@ func (w *Workers[R]) Start(ctx context.Context) {
 
 		// If StopOnError is enabled, forward internal errors to the outward channel.
 		if w.config.StopOnError {
-			w.forwardErrors()
+			w.forwarderWG.Add(1)
+			go func() {
+				defer w.forwarderWG.Done()
+				forwardedFirst := false
+				for {
+					select {
+					case e := <-w.errorsBuf:
+						// Cancel first so dispatch loop stops promptly.
+						w.cancel()
+						if !forwardedFirst {
+							// Forward only the first error outward.
+							forwardedFirst = true
+							select {
+							case w.errors <- e:
+								// forwarded synchronously
+							default:
+								w.errorsSendWG.Add(1)
+								go func(err error) {
+									defer w.errorsSendWG.Done()
+									select {
+									case w.errors <- err:
+										// delivered when reader appears
+									case <-w.closeCh:
+										// drop if closing
+									}
+								}(e)
+							}
+						} else {
+							// Drop subsequent errors (including cancellations) while draining the buffer.
+						}
+					case <-w.closeCh:
+						// Drain any remaining internal errors (drop them), then exit.
+						for {
+							select {
+							case <-w.errorsBuf:
+								// drop
+							default:
+								return
+							}
+						}
+					}
+				}
+			}()
 		}
 
-		go w.dispatchTasks(w.ctx)
+		go func(ctx context.Context) {
+			for {
+				select {
+				case <-ctx.Done():
+					// stop dispatcher without mutating w.tasks to avoid races
+					return
+
+				case t := <-w.tasks:
+					w.inflight.Add(1)
+					go func(tt Task[R]) {
+						defer w.inflight.Done()
+						w.dispatch(ctx, tt)
+					}(t)
+				}
+			}
+		}(w.ctx)
 	})
 }
 
@@ -186,8 +243,6 @@ func (w *Workers[R]) forwardErrors() {
 		defer w.forwarderWG.Done()
 		for {
 			select {
-			case <-ctx.Done():
-				return
 			case e := <-w.errorsBuf:
 				// Cancel first so dispatch loop stops promptly.
 				w.cancel()
@@ -206,6 +261,22 @@ func (w *Workers[R]) forwardErrors() {
 							// drop if closing
 						}
 					}(e)
+				}
+			case <-ctx.Done():
+				// Drain remaining internal errors best-effort to avoid blocking workers.
+				for {
+					select {
+					case e := <-w.errorsBuf:
+						// best-effort non-blocking forward; drop if outward is saturated
+						select {
+						case w.errors <- e:
+							// forwarded
+						default:
+							// drop
+						}
+					default:
+						return
+					}
 				}
 			}
 		}
@@ -241,7 +312,7 @@ func (w *Workers[R]) Close() {
 	w.closeOnce.Do(func() {
 		// prevent further AddTask attempts from succeeding via context cancellation (no need to nil tasks)
 
-		// cancel internal context to stop dispatch and forwarder
+		// cancel internal context to stop dispatch
 		if w.cancel != nil {
 			w.cancel()
 		}
@@ -249,13 +320,14 @@ func (w *Workers[R]) Close() {
 		// wait for in-flight tasks to finish
 		w.inflight.Wait()
 
-		// ensure forwarder stopped before closing outward errors
-		w.forwarderWG.Wait()
-
-		// signal detached senders to exit and wait for them
+		// signal detached senders and forwarder to exit, then wait for them
 		if w.closeCh != nil {
 			close(w.closeCh)
 		}
+
+		// ensure forwarder stopped before closing outward errors
+		w.forwarderWG.Wait()
+
 		w.errorsSendWG.Wait()
 
 		// drain any remaining internal errors best-effort
