@@ -15,6 +15,7 @@ type Task[R interface{}] struct {
 	fn          func(context.Context) (R, error)
 	_sendResult bool
 	_id         any
+	_index      int
 }
 
 // TaskFunc adapts func(ctx) (R, error) to a Task that emits results on success.
@@ -50,8 +51,15 @@ func TaskErrorWithID[R interface{}](id any, fn func(context.Context) error) Task
 // WithID returns a shallow copy of t with its ID set to id.
 func (t Task[R]) WithID(id any) Task[R] { t._id = id; return t }
 
+// WithIndex returns a shallow copy of t with its input sequence index set.
+// This is used internally for error correlation when tagging is enabled.
+func (t Task[R]) WithIndex(i int) Task[R] { t._index = i; return t }
+
 // ID returns the opaque identifier associated with the task (may be nil).
 func (t Task[R]) ID() any { return t._id }
+
+// Index returns the input sequence index if present (true when set by Workers).
+func (t Task[R]) Index() (int, bool) { return t._index, t._index != 0 || t._id != nil }
 
 // execTask centralizes goroutine launch, panic recovery, and ctx cancellation.
 // The `call` closure must do the actual work and return (R, error).

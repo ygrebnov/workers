@@ -90,7 +90,7 @@ func New[R interface{}](ctx context.Context, config *Config) *Workers[R] {
 		workerErrors = make(chan error, config.ErrorsBufferSize)
 	}
 
-	newWorkerFn := func() interface{} { return newWorker(r, workerErrors) }
+	newWorkerFn := func() interface{} { return newWorker(r, workerErrors, config.ErrorTagging) }
 
 	var p pool.Pool
 	if config.MaxWorkers > 0 {
@@ -172,7 +172,7 @@ func (w *Workers[R]) initPoolIfNeeded() {
 	if w.config.StopOnError {
 		workerErrors = w.errorsBuf
 	}
-	newWorkerFn := func() interface{} { return newWorker(w.results, workerErrors) }
+	newWorkerFn := func() interface{} { return newWorker(w.results, workerErrors, w.config.ErrorTagging) }
 	if w.config.MaxWorkers > 0 {
 		w.pool = pool.NewFixed(w.config.MaxWorkers, newWorkerFn)
 	} else {
@@ -325,6 +325,8 @@ func (w *Workers[R]) AddTask(t Task[R]) error {
 	// Apply error-tagging wrapper if enabled, capturing a sequence index.
 	if w.config != nil && w.config.ErrorTagging {
 		idx := int(atomic.AddUint64(&w.seq, 1) - 1)
+		// Persist index on task for worker-side safety net tagging (cancellation fast-paths).
+		t = t.WithIndex(idx)
 		t = wrapTaskWithTagging(t, idx)
 	}
 

@@ -173,10 +173,14 @@ func TestErrorTagging_Cancel_Tagged(t *testing.T) {
 	select {
 	case e := <-w.GetErrors():
 		id, ok := workers.ExtractTaskID(e)
-		require.True(t, ok)
+		if !ok {
+			t.Fatalf("received untagged error: %T: %+v", e, e)
+		}
 		require.Equal(t, any(cancelID), id)
 		idx, ok := workers.ExtractTaskIndex(e)
-		require.True(t, ok)
+		if !ok {
+			t.Fatalf("received error without index: %T: %+v", e, e)
+		}
 		require.Equal(t, 0, idx)
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for cancel error")
