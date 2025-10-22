@@ -73,15 +73,10 @@ func enqueueWrappedTasks[R any](w *Workers[R], tasks []Task[R], done chan struct
 	return started
 }
 
-// waitCompletions waits for exactly started completion signals or until ctx is done.
-func waitCompletions(ctx context.Context, started int, done chan struct{}) {
+// waitCompletions waits for exactly started completion signals.
+func waitCompletions(_ context.Context, started int, done chan struct{}) {
 	for i := 0; i < started; i++ {
-		select {
-		case <-done:
-			// ok
-		case <-ctx.Done():
-			// Context canceled by caller; continue to Close and drain.
-		}
+		<-done
 	}
 }
 
