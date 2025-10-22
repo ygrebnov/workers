@@ -8,10 +8,12 @@ type worker[R any] struct {
 	results    chan R
 	errors     chan error
 	tagEnabled bool
+	preserve   bool
+	events     chan completionEvent[R]
 }
 
-func newWorker[R any](results chan R, errors chan error, tagEnabled bool) *worker[R] {
-	return &worker[R]{results: results, errors: errors, tagEnabled: tagEnabled}
+func newWorker[R any](results chan R, errors chan error, tagEnabled bool, preserve bool, events chan completionEvent[R]) *worker[R] {
+	return &worker[R]{results: results, errors: errors, tagEnabled: tagEnabled, preserve: preserve, events: events}
 }
 
 func (w *worker[R]) execute(ctx context.Context, t Task[R]) {
@@ -27,7 +29,23 @@ func (w *worker[R]) execute(ctx context.Context, t Task[R]) {
 				}
 			}
 		}
+		// In preserve-order mode, still emit a completion event (present=false) so reordering can advance.
+		if w.preserve && w.events != nil {
+			idx, _ := t.Index()
+			w.events <- completionEvent[R]{idx: idx, id: t.ID(), present: false}
+		}
 		w.errors <- err
+		return
+	}
+
+	if w.preserve && w.events != nil {
+		// Emit completion event; present only if task wants to send result.
+		idx, _ := t.Index()
+		if t.SendResult() {
+			w.events <- completionEvent[R]{idx: idx, id: t.ID(), val: result, present: true}
+		} else {
+			w.events <- completionEvent[R]{idx: idx, id: t.ID(), present: false}
+		}
 		return
 	}
 

@@ -94,6 +94,12 @@ func WithErrorTagging() Option {
 	return func(co *configOptions) error { co.cfg.ErrorTagging = true; return nil }
 }
 
+// WithPreserveOrder enforces emitting results in input order at the core level.
+// When enabled, Workers reorder completed tasks and only deliver results in index order.
+func WithPreserveOrder() Option {
+	return func(co *configOptions) error { co.cfg.PreserveOrder = true; return nil }
+}
+
 // NewOptions creates a new Workers instance using functional options.
 // Breaking change: returns (*Workers, error) instead of panicking on invalid options.
 // It preserves backward compatibility in behavior by internally constructing a Config and delegating to New.

@@ -49,8 +49,12 @@ type Workers[R interface{}] struct {
 	// closed during Close to unblock any pending detached senders safely
 	closeCh chan struct{}
 
-	// sequence counter for tasks accepted via AddTask (used for error tagging)
+	// sequence counter for tasks accepted via AddTask (used for error tagging and preserve-order indexing)
 	seq uint64
+
+	// preserve-order internal events stream and coordinator waitgroup
+	events    chan completionEvent[R]
+	reorderWG sync.WaitGroup
 }
 
 // noCopy is a vet-recognized marker to discourage copying types with this field embedded.
@@ -90,7 +94,15 @@ func New[R interface{}](ctx context.Context, config *Config) *Workers[R] {
 		workerErrors = make(chan error, config.ErrorsBufferSize)
 	}
 
-	newWorkerFn := func() interface{} { return newWorker(r, workerErrors, config.ErrorTagging) }
+	// Prepare preserve-order events channel if enabled.
+	var events chan completionEvent[R]
+	if config.PreserveOrder {
+		events = make(chan completionEvent[R], config.ResultsBufferSize)
+	}
+
+	newWorkerFn := func() interface{} {
+		return newWorker(r, workerErrors, config.ErrorTagging, config.PreserveOrder, events)
+	}
 
 	var p pool.Pool
 	if config.MaxWorkers > 0 {
@@ -109,6 +121,7 @@ func New[R interface{}](ctx context.Context, config *Config) *Workers[R] {
 		tasks:   tasks,
 		results: r,
 		pool:    p,
+		events:  events,
 	}
 
 	if config.StopOnError {
@@ -135,6 +148,7 @@ func (w *Workers[R]) Start(ctx context.Context) {
 		w.initPoolIfNeeded()
 		w.initContext(ctx)
 		w.startErrorForwarderIfNeeded()
+		w.startReordererIfNeeded()
 		w.startDispatcher(w.ctx)
 	})
 }
@@ -161,6 +175,9 @@ func (w *Workers[R]) initChannelsIfNeeded() {
 	if w.tasks == nil {
 		w.tasks = make(chan Task[R])
 	}
+	if w.config.PreserveOrder && w.events == nil {
+		w.events = make(chan completionEvent[R], w.config.ResultsBufferSize)
+	}
 }
 
 // initPoolIfNeeded sets up the pool, wiring worker errors to either errorsBuf or errors.
@@ -172,7 +189,9 @@ func (w *Workers[R]) initPoolIfNeeded() {
 	if w.config.StopOnError {
 		workerErrors = w.errorsBuf
 	}
-	newWorkerFn := func() interface{} { return newWorker(w.results, workerErrors, w.config.ErrorTagging) }
+	newWorkerFn := func() interface{} {
+		return newWorker(w.results, workerErrors, w.config.ErrorTagging, w.config.PreserveOrder, w.events)
+	}
 	if w.config.MaxWorkers > 0 {
 		w.pool = pool.NewFixed(w.config.MaxWorkers, newWorkerFn)
 	} else {
@@ -234,6 +253,56 @@ func (w *Workers[R]) startErrorForwarderIfNeeded() {
 	}()
 }
 
+// startReordererIfNeeded launches the preserve-order reorder coordinator when enabled.
+func (w *Workers[R]) startReordererIfNeeded() {
+	if !w.config.PreserveOrder {
+		return
+	}
+	w.reorderWG.Add(1)
+	go func() {
+		defer w.reorderWG.Done()
+		next := 0
+		buf := make(map[int]R)
+		seenNoRes := make(map[int]struct{})
+		for ev := range w.events {
+			if ev.present {
+				buf[ev.idx] = ev.val
+			} else {
+				seenNoRes[ev.idx] = struct{}{}
+			}
+			for {
+				if v, ok := buf[next]; ok {
+					w.results <- v
+					delete(buf, next)
+					next++
+					continue
+				}
+				if _, ok := seenNoRes[next]; ok {
+					delete(seenNoRes, next)
+					next++
+					continue
+				}
+				break
+			}
+		}
+		// best-effort flush contiguous tail after events closed
+		for {
+			if v, ok := buf[next]; ok {
+				w.results <- v
+				delete(buf, next)
+				next++
+				continue
+			}
+			if _, ok := seenNoRes[next]; ok {
+				delete(seenNoRes, next)
+				next++
+				continue
+			}
+			break
+		}
+	}()
+}
+
 // startDispatcher launches the task dispatcher loop.
 func (w *Workers[R]) startDispatcher(ctx context.Context) {
 	go func(ctx context.Context) {
@@ -286,6 +355,12 @@ func (w *Workers[R]) Close() {
 		// drain any remaining internal errors best-effort
 		w.drainInternalErrors()
 
+		// close reorder events and wait coordinator before closing outward results
+		if w.events != nil {
+			close(w.events)
+			w.reorderWG.Wait()
+		}
+
 		close(w.results)
 		close(w.errors)
 	})
@@ -317,17 +392,18 @@ func (w *Workers[R]) AddTask(t Task[R]) error {
 	switch {
 	case w.tasks == nil:
 		return ErrInvalidState
-
 	case cap(w.tasks) > 0 && len(w.tasks) == cap(w.tasks):
 		panic("tasks channel is full")
 	}
 
-	// Apply error-tagging wrapper if enabled, capturing a sequence index.
-	if w.config != nil && w.config.ErrorTagging {
+	// Assign input index when either error tagging or preserve-order are enabled.
+	if w.config != nil && (w.config.ErrorTagging || w.config.PreserveOrder) {
 		idx := int(atomic.AddUint64(&w.seq, 1) - 1)
-		// Persist index on task for worker-side safety net tagging (cancellation fast-paths).
 		t = t.WithIndex(idx)
-		t = wrapTaskWithTagging(t, idx)
+		if w.config.ErrorTagging {
+			// wrap to propagate tagging on the error path
+			t = wrapTaskWithTagging(t, idx)
+		}
 	}
 
 	// If we've been started and the internal context is canceled, don't block; return ErrInvalidState.
