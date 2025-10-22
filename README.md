@@ -165,6 +165,63 @@ Calculated Fibonacci for: 11, result: 89.
     it’s forwarded via a detached goroutine and delivered once a reader appears. If Close() happens first,
     pending errors may be dropped.
 
+### StopOnError forwarding semantics (buffered vs unbuffered)
+
+This note documents how StopOnError forwards the first error and cancels scheduling, and how outward error channel buffering changes behavior.
+
+#### Overview
+When `WithStopOnError()` is enabled:
+- On the first error produced by any worker, the controller cancels promptly (cancel-first), which stops further task scheduling and lets in-flight tasks observe `ctx.Done()`.
+- The triggering error is then forwarded to the outward errors channel.
+- If the outward channel cannot accept the error immediately, the controller uses a detached goroutine to deliver the error when a reader eventually appears. If `Close()` occurs first, the pending send is signaled to exit and the error may be dropped (best-effort delivery).
+- After cancellation, `AddTask` returns `ErrInvalidState` deterministically and never blocks.
+
+#### Internal vs outward buffers
+- Internal buffer (producer side):
+    - Size is controlled by `WithStopOnErrorBuffer(size)` / `StopOnErrorErrorsBufferSize`.
+    - Workers push their errors into this internal buffer when StopOnError is enabled.
+    - The controller consumes from this buffer, cancels first, and only then forwards outward.
+- Outward buffer (consumer side):
+    - Size is controlled by `WithErrorsBuffer(size)` / `ErrorsBufferSize`.
+    - It determines how the controller forwards errors to consumers of `GetErrors()`.
+
+#### Buffered outward errors (size > 0)
+- Cancel-first happens immediately.
+- The first error is forwarded synchronously if there is capacity left in the outward buffer.
+- If the outward channel has room, forwarding is non-blocking and immediate.
+
+Example:
+- Options: `WithStopOnError()`, `WithStopOnErrorBuffer(1)`, `WithErrorsBuffer(1)`
+- Behavior: cancellation occurs, the error is forwarded synchronously into the outward channel if it has capacity.
+
+#### Unbuffered or saturated outward errors (size == 0, or no reader yet)
+- Cancel-first happens immediately.
+- Forwarding is performed via a detached goroutine that delivers the error when a reader appears.
+- If `Close()` happens before a reader is ready, the pending detached send is signaled to exit; the error may be dropped (best-effort delivery).
+
+Example:
+- Options: `WithStopOnError()`, `WithStopOnErrorBuffer(1)`, `WithErrorsBuffer(0)`
+- Behavior: cancellation occurs; the error will be delivered once a reader starts receiving from `GetErrors()`.
+
+#### Close semantics with StopOnError
+`Close()`:
+- Cancels the internal context (stops dispatch and the StopOnError forwarder).
+- Waits for in-flight tasks to finish.
+- Waits for the forwarder to stop, then signals and waits for any detached senders.
+- Drains any remaining internal errors best-effort into the outward channel (non-blocking), then closes results and errors channels.
+
+#### Guidance
+- Prefer a buffered outward errors channel when you want the first error to be forwarded synchronously without requiring an immediate reader.
+- Use an unbuffered outward errors channel when you need strict backpressure (readers must be present to receive). Know that delivery is best-effort if `Close()` happens before a reader appears.
+- Keep `StopOnErrorErrorsBufferSize` small to propagate cancellation quickly under error bursts; increase only if you expect brief spikes before a reader drains.
+
+#### Tests guaranteeing behavior
+- Buffered outward path: `TestStart_StopOnError_BufferedOutward_SynchronousForward`.
+- Unbuffered outward path: `TestStart_StopOnError_UnbufferedOutward_AsyncForward`.
+- Post-cancellation AddTask returns `ErrInvalidState`:
+    - Buffered outward: `TestAddTask_ReturnsInvalidState_AfterStopOnErrorCancellation`.
+    - Unbuffered outward: `TestAddTask_ReturnsInvalidState_AfterStopOnErrorCancellation_UnbufferedOutward`.
+
 ## Choosing between dynamic and fixed-size pool
 ### When a dynamic-size pool is a better fit
 - Bursty or unpredictable workloads: dynamic grows parallelism during spikes to keep latency down, then shrinks afterward.

@@ -29,7 +29,7 @@ test: dir-coverage
 	@go tool cover -html=$(COVERAGE_PATH)coverage.txt -o $(COVERAGE_PATH)coverage.html
 
 test-race:
-	@go test@go test ./... -race -count=1 -timeout=600s
+	@go test ./... -race -count=1 -timeout=600s
 
 # Run only the FIFO vs Pools benchmarks with memory stats and save output
 bench: dir-bench
