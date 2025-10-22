@@ -8,9 +8,13 @@ import (
 // Task encapsulates a unit of work function and whether a successful execution
 // should emit a result to the results channel.
 // Use TaskFunc / TaskValue / TaskError to construct instances.
+//
+// v2: Task now carries an optional opaque identifier set by constructors with ID
+// or via WithID. The ID is intended for correlation and observability.
 type Task[R interface{}] struct {
 	fn          func(context.Context) (R, error)
 	_sendResult bool
+	_id         any
 }
 
 // TaskFunc adapts func(ctx) (R, error) to a Task that emits results on success.
@@ -18,15 +22,36 @@ func TaskFunc[R interface{}](fn func(context.Context) (R, error)) Task[R] {
 	return Task[R]{fn: fn, _sendResult: true}
 }
 
+// TaskFuncWithID adapts func(ctx) (R, error) to a Task with a provided ID that emits results on success.
+func TaskFuncWithID[R interface{}](id any, fn func(context.Context) (R, error)) Task[R] {
+	return Task[R]{fn: fn, _sendResult: true, _id: id}
+}
+
 // TaskValue adapts func(ctx) R to a Task that emits results on success.
 func TaskValue[R interface{}](fn func(context.Context) R) Task[R] {
 	return Task[R]{fn: func(ctx context.Context) (R, error) { return fn(ctx), nil }, _sendResult: true}
+}
+
+// TaskValueWithID adapts func(ctx) R to a Task with a provided ID that emits results on success.
+func TaskValueWithID[R interface{}](id any, fn func(context.Context) R) Task[R] {
+	return Task[R]{fn: func(ctx context.Context) (R, error) { return fn(ctx), nil }, _sendResult: true, _id: id}
 }
 
 // TaskError adapts func(ctx) error to a Task that does NOT emit results.
 func TaskError[R interface{}](fn func(context.Context) error) Task[R] {
 	return Task[R]{fn: func(ctx context.Context) (R, error) { var zero R; return zero, fn(ctx) }, _sendResult: false}
 }
+
+// TaskErrorWithID adapts func(ctx) error to a Task with a provided ID that does NOT emit results.
+func TaskErrorWithID[R interface{}](id any, fn func(context.Context) error) Task[R] {
+	return Task[R]{fn: func(ctx context.Context) (R, error) { var zero R; return zero, fn(ctx) }, _sendResult: false, _id: id}
+}
+
+// WithID returns a shallow copy of t with its ID set to id.
+func (t Task[R]) WithID(id any) Task[R] { t._id = id; return t }
+
+// ID returns the opaque identifier associated with the task (may be nil).
+func (t Task[R]) ID() any { return t._id }
 
 // execTask centralizes goroutine launch, panic recovery, and ctx cancellation.
 // The `call` closure must do the actual work and return (R, error).
