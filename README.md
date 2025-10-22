@@ -221,6 +221,8 @@ Example:
 
 Enable deterministic, input-order delivery of results by adding `workers.WithPreserveOrder()` when constructing Workers. When enabled, the outward results channel emits results in the same order as tasks were added (by input index), not by completion time.
 
+Implementation details are sketched in `improvements/preserve_order.md#Implementation` and realized in the core via a coordinator goroutine and completion events; see that doc for a deeper technical design.
+
 ### Usage
 
 ```go
@@ -237,7 +239,7 @@ _ = w.AddTask(workers.TaskValue[int](func(ctx context.Context) int { /* ... */ r
 // ...
 ```
 
-Applies to all APIs using the core Workers controller (including helpers like `RunAll` that forward options).
+Applies to all APIs using the core Workers controller (including helpers like `RunAll` and `Map` that forward options).
 
 ### What is considered a "result"
 - A task contributes a result only if it returns `err == nil` and `SendResult() == true` (i.e., created via `TaskValue` or a `TaskFunc` that signals result emission).

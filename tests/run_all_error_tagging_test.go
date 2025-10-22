@@ -30,7 +30,7 @@ func TestRunAll_ErrorTagging_PreservesIDAndIndex(t *testing.T) {
 		workers.TaskErrorWithID[string]("b", func(context.Context) error { return errors.New("B") }),
 	}
 
-	res, err := workers.RunAll[string](ctx, tasks, workers.WithErrorTagging(), workers.WithDynamicPool(), workers.WithStartImmediately())
+	res, err := workers.RunAll[string](ctx, tasks, workers.WithErrorTagging(), workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
 	require.Len(t, res, 0)
 	require.Error(t, err)
 
