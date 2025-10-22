@@ -122,6 +122,12 @@ func BenchmarkFIFO_vs_Pools_Matrix256_64Tasks(b *testing.B) {
 		})
 	})
 
+	b.Run("dynamic_preserve_order", func(b *testing.B) {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
+			return workers.New[float64](ctx, &workers.Config{StartImmediately: true, PreserveOrder: true})
+		})
+	})
+
 	// RunAll variants to measure orchestration overhead vs direct pool usage.
 	b.Run("run_all_fixed_NCPU", func(b *testing.B) {
 		b.ReportAllocs()
@@ -146,6 +152,22 @@ func BenchmarkFIFO_vs_Pools_Matrix256_64Tasks(b *testing.B) {
 				tasks,
 				workers.WithDynamicPool(),
 				workers.WithStartImmediately(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
+	})
+
+	b.Run("run_all_dynamic_preserve_order", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithDynamicPool(),
+				workers.WithStartImmediately(),
+				workers.WithPreserveOrder(),
 			)
 			if err != nil {
 				b.Fatalf("RunAll failed: %v", err)
@@ -189,6 +211,12 @@ func BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks(b *testing.B) {
 		})
 	})
 
+	b.Run("dynamic_preserve_order", func(b *testing.B) {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
+			return workers.New[float64](ctx, &workers.Config{StartImmediately: true, PreserveOrder: true})
+		})
+	})
+
 	// RunAll variants to measure orchestration overhead vs direct pool usage.
 	b.Run("run_all_fixed_NCPU", func(b *testing.B) {
 		b.ReportAllocs()
@@ -213,6 +241,22 @@ func BenchmarkFIFO_vs_Pools_Alloc4MiB_64Tasks(b *testing.B) {
 				tasks,
 				workers.WithDynamicPool(),
 				workers.WithStartImmediately(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
+	})
+
+	b.Run("run_all_dynamic_preserve_order", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithDynamicPool(),
+				workers.WithStartImmediately(),
+				workers.WithPreserveOrder(),
 			)
 			if err != nil {
 				b.Fatalf("RunAll failed: %v", err)
