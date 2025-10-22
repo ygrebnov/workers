@@ -23,7 +23,7 @@ func TestErrorTagging_Disabled_NoMeta(t *testing.T) {
 	for i := 0; i < n; i++ {
 		msg := fmt.Sprintf("e%d", i)
 		msgs[i] = msg
-		require.NoError(t, w.AddTask(workers.TaskError[string](func(context.Context) error { return fmt.Errorf(msg) })))
+		require.NoError(t, w.AddTask(workers.TaskError[string](func(context.Context) error { return errors.New(msg) })))
 	}
 
 	received := make([]string, 0, n)

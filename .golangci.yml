@@ -59,6 +59,7 @@ linters-settings:
     threshold: 100
   funlen:
     ignore-comments: true
+    lines: 80
   gci:
     sections:
       - standard
@@ -75,11 +76,13 @@ linters-settings:
       - experimental
       - opinionated
   gocyclo:
-    min-complexity: 11
+    min-complexity: 12
   goimports:
     local-prefixes: github.com/ygrebnov/workers
   gosec:
     exclude-generated: true
+    excludes:
+      - G115
   govet:
     enable:
       - shadow

@@ -12,7 +12,9 @@ type worker[R any] struct {
 	events     chan completionEvent[R]
 }
 
-func newWorker[R any](results chan R, errors chan error, tagEnabled bool, preserve bool, events chan completionEvent[R]) *worker[R] {
+func newWorker[R any](
+	results chan R, errors chan error, tagEnabled, preserve bool, events chan completionEvent[R],
+) *worker[R] {
 	return &worker[R]{results: results, errors: errors, tagEnabled: tagEnabled, preserve: preserve, events: events}
 }
 

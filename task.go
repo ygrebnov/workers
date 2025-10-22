@@ -45,7 +45,11 @@ func TaskError[R interface{}](fn func(context.Context) error) Task[R] {
 
 // TaskErrorWithID adapts func(ctx) error to a Task with a provided ID that does NOT emit results.
 func TaskErrorWithID[R interface{}](id any, fn func(context.Context) error) Task[R] {
-	return Task[R]{fn: func(ctx context.Context) (R, error) { var zero R; return zero, fn(ctx) }, _sendResult: false, _id: id}
+	return Task[R]{
+		fn:          func(ctx context.Context) (R, error) { var zero R; return zero, fn(ctx) },
+		_sendResult: false,
+		_id:         id,
+	}
 }
 
 // WithID returns a shallow copy of t with its ID set to id.
