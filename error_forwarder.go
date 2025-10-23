@@ -23,7 +23,11 @@ type errorForwarder struct {
 }
 
 func newErrorForwarder(
-	in <-chan error, out chan<- error, closeCh <-chan struct{}, cancel context.CancelFunc, sendWG *sync.WaitGroup,
+	in <-chan error,
+	out chan<- error,
+	closeCh <-chan struct{},
+	cancel context.CancelFunc,
+	sendWG *sync.WaitGroup,
 ) *errorForwarder {
 	return &errorForwarder{in: in, out: out, closeCh: closeCh, cancel: cancel, sendWG: sendWG}
 }
@@ -37,21 +41,7 @@ func (f *errorForwarder) run() {
 			f.cancel()
 			if !forwardedFirst {
 				forwardedFirst = true
-				select {
-				case f.out <- e:
-					// forwarded synchronously
-				default:
-					f.sendWG.Add(1)
-					go func(err error) {
-						defer f.sendWG.Done()
-						select {
-						case f.out <- err:
-							// delivered when reader appears
-						case <-f.closeCh:
-							// drop if closing
-						}
-					}(e)
-				}
+				f.forward(e)
 			}
 		case <-f.closeCh:
 			// Drain any remaining internal errors (drop them), then exit.
@@ -64,5 +54,23 @@ func (f *errorForwarder) run() {
 				}
 			}
 		}
+	}
+}
+
+func (f *errorForwarder) forward(e error) {
+	select {
+	case f.out <- e:
+		// forwarded synchronously
+	default:
+		f.sendWG.Add(1)
+		go func(err error) {
+			defer f.sendWG.Done()
+			select {
+			case f.out <- err:
+				// delivered when reader appears
+			case <-f.closeCh:
+				// drop if closing
+			}
+		}(e)
 	}
 }

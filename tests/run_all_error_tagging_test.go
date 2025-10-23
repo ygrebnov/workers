@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -27,7 +28,16 @@ func TestRunAll_ErrorTagging_PreservesIDAndIndex(t *testing.T) {
 
 	tasks := []workers.Task[string]{
 		workers.TaskErrorWithID[string]("a", func(context.Context) error { return errors.New("A") }),
-		workers.TaskErrorWithID[string]("b", func(context.Context) error { return errors.New("B") }),
+		workers.TaskErrorWithID[string]("b", func(context.Context) error {
+			time.Sleep(200 * time.Millisecond)
+			return errors.New("B")
+		}),
+		workers.TaskErrorWithID[string]("c", func(context.Context) error { return errors.New("C") }),
+		workers.TaskErrorWithID[string]("d", func(context.Context) error {
+			time.Sleep(100 * time.Millisecond)
+			return errors.New("D")
+		}),
+		workers.TaskErrorWithID[string]("e", func(context.Context) error { return errors.New("E") }),
 	}
 
 	res, err := workers.RunAll[string](
@@ -42,7 +52,7 @@ func TestRunAll_ErrorTagging_PreservesIDAndIndex(t *testing.T) {
 	require.Error(t, err)
 
 	parts := unwrapJoined(err)
-	require.Len(t, parts, 2)
+	require.Len(t, parts, 5)
 
 	idsByIdx := map[int]any{}
 	for _, e := range parts {
@@ -55,4 +65,7 @@ func TestRunAll_ErrorTagging_PreservesIDAndIndex(t *testing.T) {
 
 	require.Equal(t, any("a"), idsByIdx[0])
 	require.Equal(t, any("b"), idsByIdx[1])
+	require.Equal(t, any("c"), idsByIdx[2])
+	require.Equal(t, any("d"), idsByIdx[3])
+	require.Equal(t, any("e"), idsByIdx[4])
 }
