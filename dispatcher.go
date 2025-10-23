@@ -3,11 +3,9 @@ package workers
 import (
 	"context"
 	"sync"
-)
 
-// executor is a tiny function type used by dispatcher to execute a single task.
-// In production wiring it wraps pool.Get/Put and worker.execute.
-type executor[R any] func(ctx context.Context, t Task[R])
+	"github.com/ygrebnov/workers/pool"
+)
 
 // dispatcher reads tasks from the input channel and executes them via executor.
 // It tracks inflight tasks with a WaitGroup. The dispatcher stops when ctx.Done()
@@ -16,12 +14,12 @@ type executor[R any] func(ctx context.Context, t Task[R])
 
 type dispatcher[R any] struct {
 	tasks    <-chan Task[R]
-	exec     executor[R]
 	inflight *sync.WaitGroup
+	pool     pool.Pool // worker pool
 }
 
-func newDispatcher[R any](tasks <-chan Task[R], exec executor[R], inflight *sync.WaitGroup) *dispatcher[R] {
-	return &dispatcher[R]{tasks: tasks, exec: exec, inflight: inflight}
+func newDispatcher[R any](tasks <-chan Task[R], inflight *sync.WaitGroup, p pool.Pool) *dispatcher[R] {
+	return &dispatcher[R]{tasks: tasks, inflight: inflight, pool: p}
 }
 
 // run starts the dispatch loop and returns when the context is canceled.
@@ -36,8 +34,14 @@ func (d *dispatcher[R]) run(ctx context.Context) {
 			d.inflight.Add(1)
 			go func(tt Task[R]) {
 				defer d.inflight.Done()
-				d.exec(ctx, tt)
+				d.execute(ctx, tt)
 			}(t)
 		}
 	}
+}
+
+func (d *dispatcher[R]) execute(ctx context.Context, t Task[R]) {
+	ww := d.pool.Get().(*worker[R])
+	ww.execute(ctx, t)
+	d.pool.Put(ww)
 }

@@ -149,7 +149,8 @@ func (w *Workers[R]) Start(ctx context.Context) {
 		w.initContext(ctx)
 		w.startErrorForwarderIfNeeded()
 		w.startReordererIfNeeded()
-		w.startDispatcher(w.ctx)
+		d := newDispatcher[R](w.tasks, &w.inflight, w.pool)
+		go d.run(w.ctx)
 	})
 }
 
@@ -230,18 +231,6 @@ func (w *Workers[R]) startReordererIfNeeded() {
 		// reorderer ignores context today; pass internal ctx for future-proofing
 		r.run(w.ctx)
 	}()
-}
-
-// startDispatcher launches the task dispatcher loop.
-func (w *Workers[R]) startDispatcher(ctx context.Context) {
-	// executor that uses pool workers
-	exec := func(c context.Context, t Task[R]) {
-		ww := w.pool.Get().(*worker[R])
-		ww.execute(c, t)
-		w.pool.Put(ww)
-	}
-	d := newDispatcher[R](w.tasks, exec, &w.inflight)
-	go d.run(ctx)
 }
 
 // Close stops scheduling new work, waits for in-flight tasks to finish, then closes results and errors.

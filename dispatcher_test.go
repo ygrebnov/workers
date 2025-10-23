@@ -2,11 +2,12 @@ package workers
 
 import (
 	"context"
-	"reflect"
 	"sort"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ygrebnov/workers/pool"
 )
 
 func TestDispatcher_HappyPath(t *testing.T) {
@@ -14,16 +15,16 @@ func TestDispatcher_HappyPath(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var mu sync.Mutex
-	seq := make([]int, 0, 8)
-	exec := func(ctx context.Context, t Task[int]) {
-		v, _ := t.Run(ctx)
-		mu.Lock()
-		seq = append(seq, v)
-		mu.Unlock()
-	}
+	actualResults := make([]int, 0, 8)
 	var inflight sync.WaitGroup
-	d := newDispatcher[int](tasks, exec, &inflight)
+	rCh := make(chan int, 8)
+	eCh := make(chan error, 8)
+	evCh := make(chan completionEvent[int], 8)
+	p := pool.NewDynamic(
+		func() interface{} {
+			return newWorker[int](rCh, eCh, false, false, evCh)
+		})
+	d := newDispatcher[int](tasks, &inflight, p)
 
 	done := make(chan struct{})
 	go func() { d.run(ctx); close(done) }()
@@ -42,11 +43,35 @@ func TestDispatcher_HappyPath(t *testing.T) {
 	// wait for in-flight executions to complete
 	inflight.Wait()
 
+	// drain results
+	close(rCh)
+	close(eCh)
+	close(evCh)
+	for r := range rCh {
+		actualResults = append(actualResults, r)
+	}
+
 	// verify all results executed (order not guaranteed)
-	expected := []int{0, 1, 2, 3, 4}
-	sort.Ints(seq)
-	if !reflect.DeepEqual(seq, expected) {
-		t.Fatalf("unexpected executed set: got=%v want=%v", seq, expected)
+	expectedResults := []int{0, 1, 2, 3, 4}
+
+	if len(actualResults) != len(expectedResults) {
+		t.Fatalf(
+			"unexpected executed set length: got=%d want=%d",
+			len(actualResults),
+			len(expectedResults),
+		)
+	}
+
+	sort.Ints(actualResults)
+	for i := range expectedResults {
+		if actualResults[i] != expectedResults[i] {
+			t.Fatalf(
+				"unexpected executed value at index %d: got=%d want=%d",
+				i,
+				actualResults[i],
+				expectedResults[i],
+			)
+		}
 	}
 }
 
@@ -58,21 +83,27 @@ func TestDispatcher_CancelStopsReceiving(t *testing.T) {
 	var countMu sync.Mutex
 	execCount := 0
 	execDone := make(chan struct{}, 1)
-	exec := func(ctx context.Context, t Task[int]) {
-		_, _ = t.Run(ctx)
-		countMu.Lock()
-		execCount++
-		countMu.Unlock()
-		execDone <- struct{}{}
-	}
+	rCh := make(chan int, 8)
+	eCh := make(chan error, 8)
+	evCh := make(chan completionEvent[int], 8)
+	p := pool.NewDynamic(
+		func() interface{} {
+			return newWorker[int](rCh, eCh, false, false, evCh)
+		})
 	var inflight sync.WaitGroup
-	d := newDispatcher[int](tasks, exec, &inflight)
+	d := newDispatcher[int](tasks, &inflight, p)
 
 	done := make(chan struct{})
 	go func() { d.run(ctx); close(done) }()
 
 	// send first task and wait for exec
-	tasks <- TaskValue[int](func(context.Context) int { return 1 })
+	tasks <- TaskValue[int](func(context.Context) int {
+		countMu.Lock()
+		execCount++
+		countMu.Unlock()
+		execDone <- struct{}{}
+		return 1
+	})
 	select {
 	case <-execDone:
 		// ok
@@ -88,7 +119,12 @@ func TestDispatcher_CancelStopsReceiving(t *testing.T) {
 	// try a non-blocking send; should not be received by dispatcher (already stopped)
 	sent := false
 	select {
-	case tasks <- TaskValue[int](func(context.Context) int { return 2 }):
+	case tasks <- TaskValue[int](func(context.Context) int {
+		countMu.Lock()
+		execCount++
+		countMu.Unlock()
+		return 2
+	}):
 		sent = true
 	default:
 		// expected path: no receiver, send would block
