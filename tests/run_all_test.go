@@ -12,6 +12,7 @@ import (
 )
 
 func TestRunAll_HappyPath(t *testing.T) {
+	// TODO: may return context cancelled error from RunAll call.
 	ctx := context.Background()
 	// Build a batch of simple tasks returning i*2.
 	n := 10
