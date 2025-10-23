@@ -40,16 +40,16 @@ func TestRunAll_StopOnError_CancelsRemaining(t *testing.T) {
 		workers.TaskValue[int](func(ctx context.Context) int { time.Sleep(10 * time.Millisecond); return 1 }),
 		workers.TaskValue[int](func(ctx context.Context) int { time.Sleep(15 * time.Millisecond); return 2 }),
 		workers.TaskError[int](func(ctx context.Context) error { return assertErr("boom") }),
-		workers.TaskValue[int](func(ctx context.Context) int { time.Sleep(200 * time.Millisecond); return 4 }),
-		workers.TaskValue[int](func(ctx context.Context) int { time.Sleep(250 * time.Millisecond); return 5 }),
+		workers.TaskValue[int](func(ctx context.Context) int { time.Sleep(time.Second); return 4 }),
+		workers.TaskValue[int](func(ctx context.Context) int { time.Sleep(time.Second); return 5 }),
 	}
 
 	results, err := workers.RunAll[int](
 		ctx,
 		tasks,
-		workers.WithDynamicPool(),
+		workers.WithFixedPool(uint(len(tasks))),
 		workers.WithStopOnError(),
-		workers.WithStopOnErrorBuffer(1),
+		workers.WithStopOnErrorBuffer(2),
 	)
 
 	// Expect an error (first error triggers cancellation).

@@ -149,7 +149,8 @@ func (w *Workers[R]) Start(ctx context.Context) {
 		w.initContext(ctx)
 		w.startErrorForwarderIfNeeded()
 		w.startReordererIfNeeded()
-		w.startDispatcher(w.ctx)
+		d := newDispatcher[R](w.tasks, &w.inflight, w.pool)
+		go d.run(w.ctx)
 	})
 }
 
@@ -211,45 +212,10 @@ func (w *Workers[R]) startErrorForwarderIfNeeded() {
 		return
 	}
 	w.forwarderWG.Add(1)
+	ef := newErrorForwarder(w.errorsBuf, w.errors, w.closeCh, w.cancel, &w.errorsSendWG)
 	go func() {
 		defer w.forwarderWG.Done()
-		forwardedFirst := false
-		for {
-			select {
-			case e := <-w.errorsBuf:
-				// Cancel first so dispatch loop stops promptly.
-				w.cancel()
-				if !forwardedFirst {
-					// Forward only the first error outward.
-					forwardedFirst = true
-					select {
-					case w.errors <- e:
-						// forwarded synchronously
-					default:
-						w.errorsSendWG.Add(1)
-						go func(err error) {
-							defer w.errorsSendWG.Done()
-							select {
-							case w.errors <- err:
-								// delivered when reader appears
-							case <-w.closeCh:
-								// drop if closing
-							}
-						}(e)
-					}
-				}
-			case <-w.closeCh:
-				// Drain any remaining internal errors (drop them), then exit.
-				for {
-					select {
-					case <-w.errorsBuf:
-						// drop
-					default:
-						return
-					}
-				}
-			}
-		}
+		ef.run()
 	}()
 }
 
@@ -259,67 +225,12 @@ func (w *Workers[R]) startReordererIfNeeded() {
 		return
 	}
 	w.reorderWG.Add(1)
+	r := newReorderer[R](w.events, w.results)
 	go func() {
 		defer w.reorderWG.Done()
-		next := 0
-		buf := make(map[int]R)
-		seenNoRes := make(map[int]struct{})
-		for ev := range w.events {
-			if ev.present {
-				buf[ev.idx] = ev.val
-			} else {
-				seenNoRes[ev.idx] = struct{}{}
-			}
-			for {
-				if v, ok := buf[next]; ok {
-					w.results <- v
-					delete(buf, next)
-					next++
-					continue
-				}
-				if _, ok := seenNoRes[next]; ok {
-					delete(seenNoRes, next)
-					next++
-					continue
-				}
-				break
-			}
-		}
-		// best-effort flush contiguous tail after events closed
-		for {
-			if v, ok := buf[next]; ok {
-				w.results <- v
-				delete(buf, next)
-				next++
-				continue
-			}
-			if _, ok := seenNoRes[next]; ok {
-				delete(seenNoRes, next)
-				next++
-				continue
-			}
-			break
-		}
+		// reorderer ignores context today; pass internal ctx for future-proofing
+		r.run(w.ctx)
 	}()
-}
-
-// startDispatcher launches the task dispatcher loop.
-func (w *Workers[R]) startDispatcher(ctx context.Context) {
-	go func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				// stop dispatcher without mutating w.tasks to avoid races
-				return
-			case t := <-w.tasks:
-				w.inflight.Add(1)
-				go func(tt Task[R]) {
-					defer w.inflight.Done()
-					w.dispatch(ctx, tt)
-				}(t)
-			}
-		}
-	}(ctx)
 }
 
 // Close stops scheduling new work, waits for in-flight tasks to finish, then closes results and errors.
@@ -332,37 +243,23 @@ func (w *Workers[R]) startDispatcher(ctx context.Context) {
 // - Finally closes results and errors channels owned by this instance.
 func (w *Workers[R]) Close() {
 	w.closeOnce.Do(func() {
-		// prevent further AddTask attempts from succeeding via context cancellation (no need to nil tasks)
-
-		// cancel internal context to stop dispatch
-		if w.cancel != nil {
-			w.cancel()
-		}
-
-		// wait for in-flight tasks to finish
-		w.inflight.Wait()
-
-		// signal detached senders and forwarder to exit, then wait for them
-		if w.closeCh != nil {
-			close(w.closeCh)
-		}
-
-		// ensure forwarder stopped before closing outward errors
-		w.forwarderWG.Wait()
-
-		w.errorsSendWG.Wait()
-
-		// drain any remaining internal errors best-effort
-		w.drainInternalErrors()
-
-		// close reorder events and wait coordinator before closing outward results
-		if w.events != nil {
-			close(w.events)
-			w.reorderWG.Wait()
-		}
-
-		close(w.results)
-		close(w.errors)
+		lc := newLifecycleCoordinator(
+			w.cancel,
+			&w.inflight,
+			w.closeCh,
+			&w.forwarderWG,
+			&w.errorsSendWG,
+			w.drainInternalErrors,
+			func() {
+				if w.events != nil {
+					close(w.events)
+				}
+			},
+			func() { w.reorderWG.Wait() },
+			func() { close(w.results) },
+			func() { close(w.errors) },
+		)
+		lc.Close()
 	})
 }
 
@@ -432,12 +329,6 @@ func (w *Workers[R]) GetResults() chan R { return w.results }
 
 // GetErrors returns a channel to receive tasks execution errors.
 func (w *Workers[R]) GetErrors() chan error { return w.errors }
-
-func (w *Workers[R]) dispatch(ctx context.Context, t Task[R]) {
-	ww := w.pool.Get().(*worker[R])
-	ww.execute(ctx, t)
-	w.pool.Put(ww)
-}
 
 // wrapTaskWithTagging returns a Task that executes the original and wraps any error
 // with task ID and input index metadata for correlation.
