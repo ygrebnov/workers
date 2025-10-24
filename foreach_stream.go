@@ -25,6 +25,7 @@ func ForEachStream[T any](
 	go func() {
 		defer w.Close()
 
+		// TODO: make this buffered channel size configurable via options
 		done := make(chan struct{}, 1024)
 		started := 0
 
@@ -42,7 +43,7 @@ func ForEachStream[T any](
 				// Build the original error-only task.
 				orig := TaskError[struct{}](func(c context.Context) error { return fn(c, item) })
 				// Wrap to signal completion after Run(c) returns (even on cancellation).
-				wrapped := TaskError[struct{}](func(c context.Context) error {
+				wrapped := TaskError[struct{}](func(c context.Context) error { // TODO: simplify double-wrapping
 					_, e := orig.Run(c)
 					done <- struct{}{}
 					return e
