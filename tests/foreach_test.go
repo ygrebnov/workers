@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/ygrebnov/workers"
 )
 
@@ -23,7 +21,9 @@ func TestForEach_AllSucceed(t *testing.T) {
 		workers.WithDynamicPool(),
 		workers.WithStartImmediately(),
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("ForEach failed: %v", err)
+	}
 }
 
 func TestForEach_StopOnError_ReturnsError(t *testing.T) {
@@ -53,7 +53,9 @@ func TestForEach_StopOnError_ReturnsError(t *testing.T) {
 		workers.WithStartImmediately(),
 		workers.WithStopOnError(),
 	)
-	require.Error(t, err)
+	if err == nil {
+		t.Fatalf("expected error from ForEach with StopOnError, got nil")
+	}
 }
 
 func TestForEach_Panic_PropagatesErrTaskPanicked(t *testing.T) {
@@ -68,6 +70,10 @@ func TestForEach_Panic_PropagatesErrTaskPanicked(t *testing.T) {
 		workers.WithDynamicPool(),
 		workers.WithStartImmediately(),
 	)
-	require.Error(t, err)
-	require.True(t, errors.Is(err, workers.ErrTaskPanicked))
+	if err == nil {
+		t.Fatalf("expected error from panic, got nil")
+	}
+	if !errors.Is(err, workers.ErrTaskPanicked) {
+		t.Fatalf("expected ErrTaskPanicked, got %v", err)
+	}
 }

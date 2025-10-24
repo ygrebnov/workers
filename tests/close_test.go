@@ -2,52 +2,98 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/ygrebnov/workers"
 )
 
 func TestClose_Idempotent(t *testing.T) {
 	ctx := context.Background()
-	w := workers.New[int](ctx, &workers.Config{StartImmediately: true})
+	w, err := workers.New[int](ctx, workers.WithStartImmediately())
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
 
 	// Call Close twice sequentially; should not panic.
-	require.NotPanics(t, func() { w.Close() })
-	require.NotPanics(t, func() { w.Close() })
+	func() {
+		deferred := false
+		defer func() {
+			if r := recover(); r != nil {
+				deferred = true
+				t.Fatalf("unexpected panic on Close(): %v", r)
+			}
+		}()
+		_ = deferred
+		w.Close()
+	}()
+	func() {
+		deferred := false
+		defer func() {
+			if r := recover(); r != nil {
+				deferred = true
+				t.Fatalf("unexpected panic on Close(): %v", r)
+			}
+		}()
+		_ = deferred
+		w.Close()
+	}()
 
 	// Channels should be closed after Close returns.
 	_, okR := <-w.GetResults()
-	require.False(t, okR, "results channel should be closed after Close()")
+	if okR {
+		t.Fatalf("results channel should be closed after Close()")
+	}
 	_, okE := <-w.GetErrors()
-	require.False(t, okE, "errors channel should be closed after Close()")
+	if okE {
+		t.Fatalf("errors channel should be closed after Close()")
+	}
 
 	// Concurrent Close calls should also be safe and idempotent.
-	w2 := workers.New[int](ctx, &workers.Config{StartImmediately: true})
+	w2, err := workers.New[int](ctx, workers.WithStartImmediately())
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
 	var wg sync.WaitGroup
 	wg.Add(10)
-	require.NotPanics(t, func() {
+	func() {
+		deferred := false
+		defer func() {
+			if r := recover(); r != nil {
+				deferred = true
+				t.Fatalf("unexpected panic during concurrent Close(): %v", r)
+			}
+		}()
+		_ = deferred
 		for i := 0; i < 10; i++ {
 			go func() { defer wg.Done(); w2.Close() }()
 		}
 		wg.Wait()
-	})
+	}()
 
 	// Verify w2 channels are closed too.
 	_, okR2 := <-w2.GetResults()
-	require.False(t, okR2)
+	if okR2 {
+		t.Fatalf("results channel should be closed after Close()")
+	}
 	_, okE2 := <-w2.GetErrors()
-	require.False(t, okE2)
+	if okE2 {
+		t.Fatalf("errors channel should be closed after Close()")
+	}
 }
 
 func TestAddTask_AfterClose_ReturnsInvalidState(t *testing.T) {
 	ctx := context.Background()
-	w := workers.New[int](ctx, &workers.Config{StartImmediately: true})
+	w, err := workers.New[int](ctx, workers.WithStartImmediately())
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
 
 	w.Close()
 
-	err := w.AddTask(workers.TaskValue[int](func(ctx context.Context) int { return 1 }))
-	require.ErrorIs(t, err, workers.ErrInvalidState)
+	err = w.AddTask(workers.TaskValue[int](func(ctx context.Context) int { return 1 }))
+	if !errors.Is(err, workers.ErrInvalidState) {
+		t.Fatalf("expected ErrInvalidState, got %v", err)
+	}
 }

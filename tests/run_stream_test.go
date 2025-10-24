@@ -2,11 +2,10 @@ package tests
 
 import (
 	"context"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/ygrebnov/workers"
 )
@@ -54,7 +53,9 @@ func TestRunStream_HappyPath(t *testing.T) {
 	in := make(chan workers.Task[int], 8)
 
 	out, errs, err := workers.RunStream[int](ctx, in, workers.WithDynamicPool())
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("RunStream setup error: %v", err)
+	}
 
 	// Produce a few tasks that complete successfully.
 	n := 10
@@ -70,10 +71,16 @@ func TestRunStream_HappyPath(t *testing.T) {
 	errors := collectErrorsWithTimeout(t, errs, 2*time.Second)
 
 	// No runtime errors expected.
-	require.Len(t, errors, 0)
-	require.Len(t, results, n)
+	if len(errors) != 0 {
+		t.Fatalf("expected no errors, got %d", len(errors))
+	}
+	if len(results) != n {
+		t.Fatalf("expected %d results, got %d", n, len(results))
+	}
 	sort.Ints(results)
-	require.Equal(t, expected, results)
+	if !reflect.DeepEqual(expected, results) {
+		t.Fatalf("unexpected results: got=%v want=%v", results, expected)
+	}
 }
 
 func TestRunStream_StopOnError_StopsForwardingAndCloses(t *testing.T) {
@@ -81,7 +88,9 @@ func TestRunStream_StopOnError_StopsForwardingAndCloses(t *testing.T) {
 	in := make(chan workers.Task[int], 8)
 
 	out, errs, err := workers.RunStream[int](ctx, in, workers.WithDynamicPool(), workers.WithStopOnError())
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("RunStream setup error: %v", err)
+	}
 
 	// Send one quick success, then an immediate error, then a few slow tasks.
 	in <- workers.TaskValue[int](func(context.Context) int { time.Sleep(10 * time.Millisecond); return 1 })
@@ -95,12 +104,18 @@ func TestRunStream_StopOnError_StopsForwardingAndCloses(t *testing.T) {
 	errors := collectErrorsWithTimeout(t, errs, 2*time.Second)
 
 	// StopOnError forwards exactly one error outward.
-	require.LessOrEqual(t, len(results), 1)
-	if len(results) == 1 {
-		require.Equal(t, 1, results[0])
+	if len(results) > 1 {
+		t.Fatalf("expected at most 1 result, got %d", len(results))
 	}
-	require.Equal(t, 1, len(errors))
-	require.Error(t, errors[0])
+	if len(results) == 1 && results[0] != 1 {
+		t.Fatalf("unexpected result value, got=%d want=1", results[0])
+	}
+	if len(errors) != 1 {
+		t.Fatalf("expected exactly 1 outward error, got %d", len(errors))
+	}
+	if errors[0] == nil {
+		t.Fatalf("expected non-nil error")
+	}
 }
 
 func TestRunStream_PreserveOrder(t *testing.T) {
@@ -108,7 +123,9 @@ func TestRunStream_PreserveOrder(t *testing.T) {
 	in := make(chan workers.Task[int], 8)
 
 	out, errs, err := workers.RunStream[int](ctx, in, workers.WithDynamicPool(), workers.WithPreserveOrder())
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("RunStream setup error: %v", err)
+	}
 
 	n := 8
 	expected := make([]int, 0, n)
@@ -126,8 +143,12 @@ func TestRunStream_PreserveOrder(t *testing.T) {
 	results := collectResultsWithTimeout[int](t, out, 2*time.Second)
 	errors := collectErrorsWithTimeout(t, errs, 2*time.Second)
 
-	require.Empty(t, errors)
-	require.Equal(t, expected, results)
+	if len(errors) != 0 {
+		t.Fatalf("expected no errors, got %d", len(errors))
+	}
+	if !reflect.DeepEqual(expected, results) {
+		t.Fatalf("unexpected ordered results: got=%v want=%v", results, expected)
+	}
 }
 
 func TestRunStream_ContextCancel(t *testing.T) {
@@ -136,7 +157,9 @@ func TestRunStream_ContextCancel(t *testing.T) {
 	in := make(chan workers.Task[int], 8)
 
 	out, errs, err := workers.RunStream[int](ctx, in, workers.WithDynamicPool())
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("RunStream setup error: %v", err)
+	}
 
 	// Enqueue a few long tasks; context deadline should cancel them.
 	for i := 0; i < 4; i++ {
@@ -148,8 +171,12 @@ func TestRunStream_ContextCancel(t *testing.T) {
 	errors := collectErrorsWithTimeout(t, errs, 2*time.Second)
 
 	// Expect cancellations to produce errors; no successful results required.
-	require.Empty(t, results)
-	require.NotEmpty(t, errors)
+	if len(results) != 0 {
+		t.Fatalf("expected no results, got %d", len(results))
+	}
+	if len(errors) == 0 {
+		t.Fatalf("expected some errors due to cancellation, got 0")
+	}
 }
 
 func TestRunStream_ClosesChannels_OnInputClose(t *testing.T) {
@@ -157,7 +184,9 @@ func TestRunStream_ClosesChannels_OnInputClose(t *testing.T) {
 	in := make(chan workers.Task[int], 8)
 
 	out, errs, err := workers.RunStream[int](ctx, in, workers.WithDynamicPool())
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("RunStream setup error: %v", err)
+	}
 
 	for i := 0; i < 5; i++ {
 		v := i
@@ -169,6 +198,10 @@ func TestRunStream_ClosesChannels_OnInputClose(t *testing.T) {
 	results := collectResultsWithTimeout[int](t, out, 2*time.Second)
 	errors := collectErrorsWithTimeout(t, errs, 2*time.Second)
 
-	require.Len(t, results, 5)
-	require.Empty(t, errors)
+	if len(results) != 5 {
+		t.Fatalf("expected 5 results, got %d", len(results))
+	}
+	if len(errors) != 0 {
+		t.Fatalf("expected no errors, got %d", len(errors))
+	}
 }

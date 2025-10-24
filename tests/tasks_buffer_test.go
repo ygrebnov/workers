@@ -11,9 +11,9 @@ func TestTasksBuffer(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "taskStringError_dynamic_startImmediately_buffer",
-			config: &workers.Config{
-				StartImmediately: true,
-				TasksBufferSize:  5, // zero value tested in nominal_test.go
+			options: []workers.Option{
+				workers.WithStartImmediately(),
+				workers.WithTasksBuffer(5), // zero value tested in nominal_test.go
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -25,10 +25,10 @@ func TestTasksBuffer(t *testing.T) {
 
 		{
 			name: "taskStringError_fixed_startImmediately_buffer",
-			config: &workers.Config{
-				MaxWorkers:       uint(runtime.NumCPU()),
-				StartImmediately: true,
-				TasksBufferSize:  5, // zero value tested in nominal_test.go
+			options: []workers.Option{
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithStartImmediately(),
+				workers.WithTasksBuffer(5), // zero value tested in nominal_test.go
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -52,9 +52,9 @@ func TestTasksBuffer(t *testing.T) {
 
 		{
 			name: "taskString_dynamic_delayedStart_tasksChannelFull",
-			config: &workers.Config{
-				MaxWorkers:      uint(runtime.NumCPU()),
-				TasksBufferSize: 4,
+			options: []workers.Option{
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithTasksBuffer(4),
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {

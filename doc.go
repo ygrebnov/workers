@@ -2,14 +2,12 @@
 // using either a dynamic or a fixed-size worker pool.
 //
 // Constructors
-//   - New(ctx, *Config): current stable constructor that accepts a Config.
-//     This form is planned for deprecation in a future release.
-//   - NewOptions(ctx, opts ...Option): options-based constructor. This will
-//     become the primary New in the next major version. Prefer this in new code.
+//   - New(ctx, opts ...Option): options-based constructor (primary).
+//     Prefer this form in new code.
 //
 // Zero value and lifecycle
 //   - The zero value of Workers is usable after calling Start(ctx); it initializes with defaults.
-//     For custom configuration, construct via New or NewOptions.
+//     For custom configuration, construct via New with options.
 //   - Start(ctx) is safe to call at most once; concurrent calls are idempotent.
 //   - Close() is provided to stop scheduling, wait for in-flight work to finish, and close
 //     the results and errors channels. Close is idempotent and safe for concurrent use.

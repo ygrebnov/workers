@@ -7,7 +7,7 @@ import "context"
 // The returned errors channel is closed when the stream is fully processed or canceled.
 //
 // Lifecycle:
-//   - Constructs Workers via NewOptions(ctx, opts...), starts it immediately.
+//   - Constructs Workers via New(ctx, opts...), starts it immediately.
 //   - Spawns a forwarder goroutine that reads from `in`, wraps each item into a TaskError,
 //     and calls AddTask. It waits for all started tasks to complete, then calls Close().
 //   - Intake stops on ctx.Done(), input channel close, or AddTask error
@@ -15,7 +15,7 @@ import "context"
 func ForEachStream[T any](
 	ctx context.Context, in <-chan T, fn func(context.Context, T) error, opts ...Option,
 ) (<-chan error, error) {
-	w, err := NewOptions[struct{}](ctx, opts...)
+	w, err := New[struct{}](ctx, opts...)
 	if err != nil {
 		return nil, err
 	}

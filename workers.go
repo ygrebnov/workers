@@ -10,13 +10,13 @@ import (
 
 // Workers manages a pool of workers executing typed tasks and exposing results/errors channels.
 // Workers is a concrete struct; methods are safe for concurrent use.
-// Zero-value is usable: call Start(ctx) to initialize with defaults (or construct via New/NewOptions).
+// Zero-value is usable: call Start(ctx) to initialize with defaults (or construct via New).
 type Workers[R interface{}] struct {
 	// noCopy prevents accidental copying of the controller.
 	//go:nocopy
 	nc noCopy
 
-	config *Config
+	config *config
 
 	once      sync.Once
 	closeOnce sync.Once
@@ -64,80 +64,66 @@ type noCopy struct{}
 func (*noCopy) Lock()   {}
 func (*noCopy) Unlock() {}
 
-// New creates a new Workers object instance and returns it.
-//
-// Deprecated: This Config-based constructor will be deprecated in a future release.
-// Prefer NewOptions(ctx, opts...) which will become the primary New in the next major version.
-//
-// The Workers object is not started automatically.
-// To start it, either 'StartImmediately' configuration option must be set to true or
-// the Start method must be called explicitly.
-func New[R interface{}](ctx context.Context, config *Config) *Workers[R] {
-	if config == nil {
-		cfg := defaultConfig()
-		config = &cfg
+// initialize sets up the Workers controller using the provided configuration.
+// If cfg is nil, defaults are applied. If StartImmediately is set, Start(ctx) is called.
+func (w *Workers[R]) initialize(ctx context.Context, cfg *config) {
+	if cfg == nil {
+		c := defaultConfig()
+		cfg = &c
 	}
 
-	if err := validateConfig(config); err != nil {
-		panic(err)
-	}
-
-	r := make(chan R, config.ResultsBufferSize)
+	r := make(chan R, cfg.ResultsBufferSize)
 
 	// Prepare the channel that workers will write errors to.
 	// In StopOnError mode, workers produce into a smaller internal buffer (errorsBuf)
 	// which the controller drains and forwards to the outward errors channel.
 	var workerErrors chan error
-	if config.StopOnError {
-		workerErrors = make(chan error, config.StopOnErrorErrorsBufferSize)
+	if cfg.StopOnError {
+		workerErrors = make(chan error, cfg.StopOnErrorErrorsBufferSize)
 	} else {
-		workerErrors = make(chan error, config.ErrorsBufferSize)
+		workerErrors = make(chan error, cfg.ErrorsBufferSize)
 	}
 
 	// Prepare preserve-order events channel if enabled.
 	var events chan completionEvent[R]
-	if config.PreserveOrder {
-		events = make(chan completionEvent[R], config.ResultsBufferSize)
+	if cfg.PreserveOrder {
+		events = make(chan completionEvent[R], cfg.ResultsBufferSize)
 	}
 
 	newWorkerFn := func() interface{} {
-		return newWorker(r, workerErrors, config.ErrorTagging, config.PreserveOrder, events)
+		return newWorker(r, workerErrors, cfg.ErrorTagging, cfg.PreserveOrder, events)
 	}
 
 	var p pool.Pool
-	if config.MaxWorkers > 0 {
-		p = pool.NewFixed(config.MaxWorkers, newWorkerFn)
+	if cfg.MaxWorkers > 0 {
+		p = pool.NewFixed(cfg.MaxWorkers, newWorkerFn)
 	} else {
 		p = pool.NewDynamic(newWorkerFn)
 	}
 
-	tasks := make(chan Task[R], config.TasksBufferSize)
-	if config.TasksBufferSize == 0 {
+	tasks := make(chan Task[R], cfg.TasksBufferSize)
+	if cfg.TasksBufferSize == 0 {
 		tasks = nil // to return error in AddTask.
 	}
 
-	w := &Workers[R]{
-		config:  config,
-		tasks:   tasks,
-		results: r,
-		pool:    p,
-		events:  events,
-	}
+	w.config = cfg
+	w.tasks = tasks
+	w.results = r
+	w.pool = p
+	w.events = events
 
-	if config.StopOnError {
+	if cfg.StopOnError {
 		// outward errors channel keeps a larger buffer for receivers
-		w.errors = make(chan error, config.ErrorsBufferSize)
+		w.errors = make(chan error, cfg.ErrorsBufferSize)
 		w.errorsBuf = workerErrors
 	} else {
 		// in non-stoppable mode, workers write directly to the outward errors channel
 		w.errors = workerErrors
 	}
 
-	if config.StartImmediately {
+	if cfg.StartImmediately {
 		w.Start(ctx)
 	}
-
-	return w
 }
 
 // Start starts the Workers and begins executing tasks.

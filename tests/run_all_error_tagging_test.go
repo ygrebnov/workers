@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/ygrebnov/workers"
 )
 
@@ -48,24 +46,32 @@ func TestRunAll_ErrorTagging_PreservesIDAndIndex(t *testing.T) {
 		workers.WithStartImmediately(),
 		workers.WithPreserveOrder(),
 	)
-	require.Len(t, res, 0)
-	require.Error(t, err)
+	if len(res) != 0 {
+		t.Fatalf("expected 0 results, got %d", len(res))
+	}
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
 
 	parts := unwrapJoined(err)
-	require.Len(t, parts, 5)
+	if len(parts) != 5 {
+		t.Fatalf("expected 5 error parts, got %d", len(parts))
+	}
 
 	idsByIdx := map[int]any{}
 	for _, e := range parts {
 		id, ok := workers.ExtractTaskID(e)
-		require.True(t, ok)
+		if !ok {
+			t.Fatalf("missing id in error: %v", e)
+		}
 		idx, ok := workers.ExtractTaskIndex(e)
-		require.True(t, ok)
+		if !ok {
+			t.Fatalf("missing index in error: %v", e)
+		}
 		idsByIdx[idx] = id
 	}
 
-	require.Equal(t, any("a"), idsByIdx[0])
-	require.Equal(t, any("b"), idsByIdx[1])
-	require.Equal(t, any("c"), idsByIdx[2])
-	require.Equal(t, any("d"), idsByIdx[3])
-	require.Equal(t, any("e"), idsByIdx[4])
+	if idsByIdx[0] != any("a") || idsByIdx[1] != any("b") || idsByIdx[2] != any("c") || idsByIdx[3] != any("d") || idsByIdx[4] != any("e") {
+		t.Fatalf("unexpected ids by index: %+v", idsByIdx)
+	}
 }

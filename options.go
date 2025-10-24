@@ -6,13 +6,13 @@ import (
 	"github.com/ygrebnov/errorc"
 )
 
-// Option configures Workers. Use NewOptions(ctx, opts...) to construct Workers via options.
+// Option configures Workers. Use New(ctx, opts...) to construct Workers via options.
 // Breaking change: Option now returns an error on invalid input instead of panicking.
 type Option func(*configOptions) error
 
 // Internal builder state for options assembly.
 type configOptions struct {
-	cfg          Config
+	cfg          config
 	poolSelected poolType
 }
 
@@ -100,10 +100,10 @@ func WithPreserveOrder() Option {
 	return func(co *configOptions) error { co.cfg.PreserveOrder = true; return nil }
 }
 
-// NewOptions creates a new Workers instance using functional options.
+// New creates a new Workers instance using functional options.
 // Breaking change: returns (*Workers, error) instead of panicking on invalid options.
-// It preserves backward compatibility in behavior by internally constructing a Config and delegating to New.
-func NewOptions[R interface{}](ctx context.Context, opts ...Option) (*Workers[R], error) {
+// It assembles an internal config and initializes the controller.
+func New[R interface{}](ctx context.Context, opts ...Option) (*Workers[R], error) {
 	co := configOptions{cfg: defaultConfig(), poolSelected: poolUnspecified}
 	for _, opt := range opts {
 		if opt == nil {
@@ -124,5 +124,7 @@ func NewOptions[R interface{}](ctx context.Context, opts ...Option) (*Workers[R]
 		return nil, errorc.With(ErrInvalidWorkersConfig, errorc.Error("", err))
 	}
 
-	return New[R](ctx, &co.cfg), nil
+	w := &Workers[R]{}
+	w.initialize(ctx, &co.cfg)
+	return w, nil
 }

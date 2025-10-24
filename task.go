@@ -9,7 +9,7 @@ import (
 // should emit a result to the results channel.
 // Use TaskFunc / TaskValue / TaskError to construct instances.
 //
-// v2: Task now carries an optional opaque identifier set by constructors with ID
+// Task carries an optional opaque identifier set by constructors with ID
 // or via WithID. The ID is intended for correlation and observability.
 type Task[R interface{}] struct {
 	fn          func(context.Context) (R, error)

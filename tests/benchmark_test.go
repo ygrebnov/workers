@@ -3,140 +3,270 @@ package tests
 import (
 	"context"
 	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
 
 	"github.com/ygrebnov/workers"
 )
 
-func fn(n int) func(context.Context) string {
-	return func(context.Context) string {
-		ints := make([]int, n)
+// cpuHeavyTask returns a task that multiplies two n x n matrices of float64 and returns the sum of the result elements.
+func cpuHeavyTask(n int) func(context.Context) float64 {
+	return func(ctx context.Context) float64 {
+		// Allocate and initialize matrices A and B.
+		A := make([]float64, n*n)
+		B := make([]float64, n*n)
+		C := make([]float64, n*n)
 
-		for i := range ints {
-			ints[i] = i + i
-		}
-
-		s := make([]string, n)
-		for i := range s {
-			s[i] = strconv.Itoa(ints[i])
-		}
-
-		return strings.Join(s, "|")
-	}
-}
-
-func getTasks(start, end, step int) []workers.Task[string] {
-	tasks := make([]workers.Task[string], 0, (end-start)/step)
-	for i := start; i < end; i += step {
-		tasks = append(tasks, workers.TaskValue[string](fn(i)))
-	}
-	return tasks
-}
-
-func BenchmarkWorkers(b *testing.B) {
-	tests := []struct {
-		name             string
-		maxWorkers       uint
-		bufferSize       int
-		startImmediately bool
-		tasks            []workers.Task[string]
-	}{
-		// less big tasks, start immediately.
-		{
-			name:             "fixed_less_big_start_immediately",
-			maxWorkers:       uint(runtime.NumCPU()),
-			startImmediately: true,
-			tasks:            getTasks(10_000_000, 100_000_000, 10_000_000),
-		},
-		{
-			name:             "dynamic_less_big_start_immediately",
-			startImmediately: true,
-			tasks:            getTasks(10_000_000, 100_000_000, 10_000_000),
-		},
-
-		// less big tasks, accumulate.
-		{
-			name:       "fixed_less_big_accumulate",
-			maxWorkers: uint(runtime.NumCPU()),
-			bufferSize: 9,
-			tasks:      getTasks(10_000_000, 100_000_000, 10_000_000),
-		},
-		{
-			name:       "dynamic_less_big_accumulate",
-			bufferSize: 9,
-			tasks:      getTasks(10_000_000, 100_000_000, 10_000_000),
-		},
-
-		// more small tasks, start immediately.
-		{
-			name:             "fixed_more_small_start_immediately",
-			maxWorkers:       uint(runtime.NumCPU()),
-			startImmediately: true,
-			tasks:            getTasks(100, 5000, 2),
-		},
-		{
-			name:             "dynamic_more_small_start_immediately",
-			startImmediately: true,
-			tasks:            getTasks(100, 5000, 2),
-		},
-
-		// more small tasks, accumulate tasks.
-		{
-			name:       "fixed_more_small_accumulate",
-			maxWorkers: uint(runtime.NumCPU()),
-			bufferSize: 2450,
-			tasks:      getTasks(100, 5000, 2),
-		},
-		{
-			name:       "dynamic_more_small_accumulate",
-			bufferSize: 2450,
-			tasks:      getTasks(100, 5000, 2),
-		},
-	}
-	for _, test := range tests {
-		b.Run(test.name, func(b *testing.B) {
-			for range b.N {
-				w := workers.New[string](
-					context.Background(),
-					&workers.Config{
-						MaxWorkers:       test.maxWorkers,
-						StartImmediately: test.startImmediately,
-						TasksBufferSize:  uint(test.bufferSize),
-					},
-				)
-
-				wg := sync.WaitGroup{}
-
-				go func() {
-					for range len(test.tasks) {
-						select {
-						case <-w.GetResults():
-						case <-w.GetErrors():
-						}
-						wg.Done()
-					}
-				}()
-
-				for _, task := range test.tasks {
-					wg.Add(1)
-					err := w.AddTask(task)
-					if err != nil {
-						b.Fatal(err)
-					}
-				}
-
-				if !test.startImmediately {
-					w.Start(context.Background())
-				}
-
-				wg.Wait()
-
-				close(w.GetResults())
-				close(w.GetErrors())
+		for i := 0; i < n; i++ {
+			for j := 0; j < n; j++ {
+				A[i*n+j] = float64(i+j+1) * 0.5
+				B[i*n+j] = float64(i-j+1) * 0.25
 			}
-		})
+		}
+
+		// Standard triple-loop matrix multiplication.
+		for i := 0; i < n; i++ {
+			for k := 0; k < n; k++ {
+				a := A[i*n+k]
+				for j := 0; j < n; j++ {
+					C[i*n+j] += a * B[k*n+j]
+				}
+			}
+		}
+
+		// Sum the result to produce a deterministic output and prevent dead-code elimination.
+		var sum float64
+		for i := 0; i < len(C); i++ {
+			sum += C[i]
+		}
+		return sum
 	}
+}
+
+// memHeavyTask returns a task that allocates and fills a buffer of size bytes and returns the checksum.
+func memHeavyTask(size int) func(context.Context) float64 {
+	return func(ctx context.Context) float64 {
+		buf := make([]byte, size)
+		var x byte = 1
+		for i := range buf {
+			x = x*33 + byte(i)
+			buf[i] = x
+		}
+		var sum uint64
+		for _, b := range buf {
+			sum += uint64(b)
+		}
+		return float64(sum)
+	}
+}
+
+func runBench[R any](b *testing.B, tasks []workers.Task[R], mk func() testWorkers[R]) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		w := mk()
+
+		wg := sync.WaitGroup{}
+		wg.Add(len(tasks))
+
+		// Reader goroutine that drains results and errors until all tasks complete.
+		go func() {
+			for range len(tasks) {
+				select {
+				case <-w.GetResults():
+					wg.Done()
+				case <-w.GetErrors():
+					wg.Done()
+				}
+			}
+		}()
+
+		for _, t := range tasks {
+			if err := w.AddTask(t); err != nil {
+				b.Fatalf("AddTask failed: %v", err)
+			}
+		}
+
+		wg.Wait()
+
+		close(w.GetResults())
+		close(w.GetErrors())
+	}
+}
+
+// Benchmark comparing FIFO vs fixed pool vs dynamic pool on a medium CPU+memory heavy workload.
+func BenchmarkPools_Matrix256_64Tasks(b *testing.B) {
+	n := 256         // medium CPU and memory per task
+	tasksCount := 64 // medium number of tasks
+	tasks := make([]workers.Task[float64], 0, tasksCount)
+	for i := 0; i < tasksCount; i++ {
+		tasks = append(tasks, workers.TaskValue[float64](cpuHeavyTask(n)))
+	}
+
+	ctx := context.Background()
+
+	b.Run("fixed_NCPU", func(b *testing.B) {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
+			w, err := workers.New[float64](ctx, workers.WithFixedPool(uint(runtime.NumCPU())), workers.WithStartImmediately())
+			if err != nil {
+				b.Fatalf("New failed: %v", err)
+			}
+			return w
+		})
+	})
+
+	b.Run("dynamic", func(b *testing.B) {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
+			w, err := workers.New[float64](ctx, workers.WithStartImmediately())
+			if err != nil {
+				b.Fatalf("New failed: %v", err)
+			}
+			return w
+		})
+	})
+
+	b.Run("dynamic_preserve_order", func(b *testing.B) {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
+			w, err := workers.New[float64](ctx, workers.WithStartImmediately(), workers.WithPreserveOrder())
+			if err != nil {
+				b.Fatalf("New failed: %v", err)
+			}
+			return w
+		})
+	})
+
+	// RunAll variants to measure orchestration overhead vs direct pool usage.
+	b.Run("run_all_fixed_NCPU", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithStartImmediately(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
+	})
+
+	b.Run("run_all_dynamic", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithDynamicPool(),
+				workers.WithStartImmediately(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
+	})
+
+	b.Run("run_all_dynamic_preserve_order", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithDynamicPool(),
+				workers.WithStartImmediately(),
+				workers.WithPreserveOrder(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
+	})
+}
+
+// Benchmark comparing FIFO vs fixed pool vs dynamic pool on a medium memory-heavy workload.
+func BenchmarkPools_Alloc4MiB_64Tasks(b *testing.B) {
+	size := 4 * 1024 * 1024 // 4 MiB per task
+	tasksCount := 64        // medium number of tasks
+	tasks := make([]workers.Task[float64], 0, tasksCount)
+	for i := 0; i < tasksCount; i++ {
+		tasks = append(tasks, workers.TaskValue[float64](memHeavyTask(size)))
+	}
+
+	ctx := context.Background()
+
+	b.Run("fixed_NCPU", func(b *testing.B) {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
+			w, err := workers.New[float64](ctx, workers.WithFixedPool(uint(runtime.NumCPU())), workers.WithStartImmediately())
+			if err != nil {
+				b.Fatalf("New failed: %v", err)
+			}
+			return w
+		})
+	})
+
+	b.Run("dynamic", func(b *testing.B) {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
+			w, err := workers.New[float64](ctx, workers.WithStartImmediately())
+			if err != nil {
+				b.Fatalf("New failed: %v", err)
+			}
+			return w
+		})
+	})
+
+	b.Run("dynamic_preserve_order", func(b *testing.B) {
+		runBench[float64](b, tasks, func() testWorkers[float64] {
+			w, err := workers.New[float64](ctx, workers.WithStartImmediately(), workers.WithPreserveOrder())
+			if err != nil {
+				b.Fatalf("New failed: %v", err)
+			}
+			return w
+		})
+	})
+
+	// RunAll variants to measure orchestration overhead vs direct pool usage.
+	b.Run("run_all_fixed_NCPU", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithStartImmediately(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
+	})
+
+	b.Run("run_all_dynamic", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithDynamicPool(),
+				workers.WithStartImmediately(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
+	})
+
+	b.Run("run_all_dynamic_preserve_order", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := workers.RunAll[float64](
+				ctx,
+				tasks,
+				workers.WithDynamicPool(),
+				workers.WithStartImmediately(),
+				workers.WithPreserveOrder(),
+			)
+			if err != nil {
+				b.Fatalf("RunAll failed: %v", err)
+			}
+		}
+	})
 }

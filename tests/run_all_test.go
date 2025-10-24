@@ -2,11 +2,10 @@ package tests
 
 import (
 	"context"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/ygrebnov/workers"
 )
@@ -24,13 +23,19 @@ func TestRunAll_HappyPath(t *testing.T) {
 	}
 
 	results, err := workers.RunAll[int](ctx, tasks, workers.WithDynamicPool())
-	require.NoError(t, err)
-	require.Len(t, results, n)
+	if err != nil {
+		t.Fatalf("RunAll failed: %v", err)
+	}
+	if len(results) != n {
+		t.Fatalf("expected %d results, got %d", n, len(results))
+	}
 
 	// Results are completion-ordered; compare as sets by sorting.
 	sort.Ints(results)
 	sort.Ints(expected)
-	require.Equal(t, expected, results)
+	if !reflect.DeepEqual(expected, results) {
+		t.Fatalf("unexpected results: got=%v want=%v", results, expected)
+	}
 }
 
 func TestRunAll_StopOnError_CancelsRemaining(t *testing.T) {
@@ -54,13 +59,19 @@ func TestRunAll_StopOnError_CancelsRemaining(t *testing.T) {
 	)
 
 	// Expect an error (first error triggers cancellation).
-	require.Error(t, err)
+	if err == nil {
+		t.Fatalf("expected error from RunAll with StopOnError, got nil")
+	}
 
 	// At least the first two quick tasks likely completed before cancellation.
 	// We don't assert exact count due to scheduling, but results should be <= 2.
-	require.LessOrEqual(t, len(results), 2)
+	if len(results) > 2 {
+		t.Fatalf("expected at most 2 results, got %d", len(results))
+	}
 	for _, r := range results {
-		require.Contains(t, []int{1, 2}, r)
+		if r != 1 && r != 2 {
+			t.Fatalf("unexpected result value %d; want 1 or 2", r)
+		}
 	}
 }
 
@@ -75,8 +86,12 @@ func TestRunAll_ContextTimeout(t *testing.T) {
 
 	results, err := workers.RunAll[int](ctx, tasks, workers.WithDynamicPool())
 	// Expect context cancellation to surface through task errors aggregation.
-	require.Error(t, err)
-	require.Empty(t, results)
+	if err == nil {
+		t.Fatalf("expected error due to context timeout, got nil")
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected no results on timeout, got %d", len(results))
+	}
 }
 
 // assertErr is a tiny helper that returns a sentinel error matching the tests intent.
