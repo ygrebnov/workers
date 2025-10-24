@@ -149,6 +149,42 @@ Calculated Fibonacci for: 19, result: 4181.
 Calculated Fibonacci for: 11, result: 89.
 ```
 
+## Helpers
+
+These top-level helpers make common usage patterns concise while preserving the core Workers semantics (pool options, StopOnError, preserve-order, buffers).
+
+- RunAll
+    - Signature: RunAll[R any](ctx context.Context, tasks []Task[R], opts ...Option) ([]R, error)
+    - Batch-executes Task[R], owns lifecycle (Start → enqueue → wait → Close), returns all results and an aggregated error (errors.Join).
+    - Ordering: completion order by default; WithPreserveOrder emits results in input order.
+    - StopOnError: cancels on first error; tasks not yet started may not run.
+
+- Map
+    - Signature: Map[T any, R any](ctx context.Context, in []T, fn func(context.Context, T) (R, error), opts ...Option) ([]R, error)
+    - Convenience over RunAll for mapping a slice through a function that returns (R, error).
+
+- ForEach
+    - Signature: ForEach[T any](ctx context.Context, in []T, fn func(context.Context, T) error, opts ...Option) error
+    - Applies a side-effecting function to each input, aggregates errors, no results channel.
+
+- RunStream
+    - Signature: RunStream[R any](ctx context.Context, in <-chan Task[R], opts ...Option) (<-chan R, <-chan error, error)
+    - Consumes Task[R] from a channel, forwards results and errors via returned channels; owns lifecycle.
+    - Ordering: completion order by default; WithPreserveOrder enforces input order.
+    - StopOnError: cancels on first error; forwarder stops reading input.
+
+- MapStream
+    - Signature: MapStream[T any, R any](ctx context.Context, in <-chan T, fn func(context.Context, T) (R, error), opts ...Option) (<-chan R, <-chan error, error)
+    - Convenience over RunStream that wraps each T into a Task[R] internally.
+
+- ForEachStream
+    - Signature: ForEachStream[T any](ctx context.Context, in <-chan T, fn func(context.Context, T) error, opts ...Option) (<-chan error, error)
+    - Applies a side-effecting function to each streamed input and returns an errors channel; errs closes when stream completes or is canceled.
+
+Notes
+- Backpressure: stream helpers propagate backpressure via configured buffers and by requiring consumers to drain the returned channels.
+- Cancellation: with StopOnError, the internal controller context is canceled on the first error; stream forwarders stop reading input and wait for already-started tasks before closing channels.
+
 ## Channels and Close
 - The library owns the Results and Errors channels. When you call Close(), it:
     - cancels the internal context so no new work is dispatched,
