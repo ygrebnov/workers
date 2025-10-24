@@ -9,7 +9,7 @@ import "context"
 // channel.
 //
 // Lifecycle:
-//   - Constructs Workers via NewOptions(ctx, opts...). If successful, starts it immediately.
+//   - Constructs Workers via New(ctx, opts...). If successful, starts it immediately.
 //   - Spawns a forwarder goroutine that reads tasks from `in`, wraps them to signal completion,
 //     and calls AddTask. The forwarder then waits for all started tasks to complete before calling Close().
 //     The forwarder stops intake when:
@@ -29,7 +29,7 @@ import "context"
 //
 //nolint:gocritic // ignore unnamed results.
 func RunStream[R any](ctx context.Context, in <-chan Task[R], opts ...Option) (<-chan R, <-chan error, error) {
-	w, err := NewOptions[R](ctx, opts...)
+	w, err := New[R](ctx, opts...)
 	if err != nil {
 		return nil, nil, err
 	}

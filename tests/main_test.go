@@ -21,7 +21,7 @@ type testWorkers[R any] interface {
 
 type testCase struct {
 	name                 string
-	config               *workers.Config
+	options              []workers.Option
 	nTasks               int
 	task                 func(int) workers.Task[string]
 	expectedAddTaskError *errAddTask
@@ -62,11 +62,9 @@ func testFn(tc *testCase) func(*testing.T) {
 			defer cancel() // Ensure the context is canceled to release resources.
 		}
 
-		// Build options equivalent to tc.config and construct via NewOptions.
-		opts := configToOptions(tc.config)
-		w, err := workers.NewOptions[string](ctx, opts...)
+		w, err := workers.New[string](ctx, tc.options...)
 		if err != nil {
-			t.Fatalf("NewOptions failed: %v", err)
+			t.Fatalf("New failed: %v", err)
 		}
 
 		done := make(chan struct{}, 1)
@@ -234,42 +232,4 @@ func checkResults(
 			return
 		}
 	}
-}
-
-// configToOptions converts a Config into the equivalent set of options.
-func configToOptions(cfg *workers.Config) []workers.Option {
-	if cfg == nil {
-		return nil
-	}
-	opts := make([]workers.Option, 0, 8)
-	if cfg.MaxWorkers > 0 {
-		opts = append(opts, workers.WithFixedPool(cfg.MaxWorkers))
-	} else {
-		opts = append(opts, workers.WithDynamicPool())
-	}
-	if cfg.StartImmediately {
-		opts = append(opts, workers.WithStartImmediately())
-	}
-	if cfg.StopOnError {
-		opts = append(opts, workers.WithStopOnError())
-	}
-	if cfg.TasksBufferSize > 0 {
-		opts = append(opts, workers.WithTasksBuffer(cfg.TasksBufferSize))
-	}
-	if cfg.ResultsBufferSize > 0 {
-		opts = append(opts, workers.WithResultsBuffer(cfg.ResultsBufferSize))
-	}
-	if cfg.ErrorsBufferSize > 0 {
-		opts = append(opts, workers.WithErrorsBuffer(cfg.ErrorsBufferSize))
-	}
-	if cfg.StopOnErrorErrorsBufferSize > 0 {
-		opts = append(opts, workers.WithStopOnErrorBuffer(cfg.StopOnErrorErrorsBufferSize))
-	}
-	if cfg.ErrorTagging {
-		opts = append(opts, workers.WithErrorTagging())
-	}
-	if cfg.PreserveOrder {
-		opts = append(opts, workers.WithPreserveOrder())
-	}
-	return opts
 }

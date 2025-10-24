@@ -11,9 +11,9 @@ import (
 
 func TestClose_Idempotent(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](ctx, workers.WithStartImmediately())
+	w, err := workers.New[int](ctx, workers.WithStartImmediately())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	// Call Close twice sequentially; should not panic.
@@ -51,9 +51,9 @@ func TestClose_Idempotent(t *testing.T) {
 	}
 
 	// Concurrent Close calls should also be safe and idempotent.
-	w2, err := workers.NewOptions[int](ctx, workers.WithStartImmediately())
+	w2, err := workers.New[int](ctx, workers.WithStartImmediately())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 	var wg sync.WaitGroup
 	wg.Add(10)
@@ -85,9 +85,9 @@ func TestClose_Idempotent(t *testing.T) {
 
 func TestAddTask_AfterClose_ReturnsInvalidState(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](ctx, workers.WithStartImmediately())
+	w, err := workers.New[int](ctx, workers.WithStartImmediately())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	w.Close()

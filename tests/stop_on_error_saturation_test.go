@@ -21,7 +21,7 @@ func TestStopOnError_CancelFirst_OutwardErrorsSaturated(t *testing.T) {
 	defer cancel()
 
 	// Configure controller.
-	w, err := workers.NewOptions[int](
+	w, err := workers.New[int](
 		testCtx,
 		workers.WithFixedPool(1),
 		workers.WithStartImmediately(),
@@ -84,7 +84,7 @@ func TestStopOnError_CancelFirst_BufferedOutward_NoDeadlock(t *testing.T) {
 	testCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	w, err := workers.NewOptions[int](
+	w, err := workers.New[int](
 		testCtx,
 		workers.WithFixedPool(1),
 		workers.WithStartImmediately(),
@@ -146,7 +146,7 @@ func TestOutwardErrors_BufferedOverflow_NoStopOnError(t *testing.T) {
 		tasksCount = 10
 	)
 
-	w, err := workers.NewOptions[int](
+	w, err := workers.New[int](
 		testCtx,
 		workers.WithFixedPool(poolSize),
 		workers.WithStartImmediately(),

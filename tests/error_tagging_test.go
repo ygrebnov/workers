@@ -13,9 +13,9 @@ import (
 
 func TestErrorTagging_Disabled_NoMeta(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[string](ctx, workers.WithStartImmediately(), workers.WithDynamicPool())
+	w, err := workers.New[string](ctx, workers.WithStartImmediately(), workers.WithDynamicPool())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	n := 5
@@ -62,9 +62,9 @@ func TestErrorTagging_Disabled_NoMeta(t *testing.T) {
 
 func TestErrorTagging_Enabled_AssignsIDAndIndex(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[string](ctx, workers.WithStartImmediately(), workers.WithDynamicPool(), workers.WithErrorTagging())
+	w, err := workers.New[string](ctx, workers.WithStartImmediately(), workers.WithDynamicPool(), workers.WithErrorTagging())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	n := 5
@@ -107,7 +107,7 @@ func TestErrorTagging_Enabled_AssignsIDAndIndex(t *testing.T) {
 
 func TestErrorTagging_StopOnError_FirstTagged(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[string](
+	w, err := workers.New[string](
 		ctx,
 		workers.WithStartImmediately(),
 		workers.WithDynamicPool(),
@@ -115,7 +115,7 @@ func TestErrorTagging_StopOnError_FirstTagged(t *testing.T) {
 		workers.WithStopOnError(),
 	)
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	firstID := "first"
@@ -152,9 +152,9 @@ func TestErrorTagging_StopOnError_FirstTagged(t *testing.T) {
 
 func TestErrorTagging_Panic_Tagged(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](ctx, workers.WithStartImmediately(), workers.WithDynamicPool(), workers.WithErrorTagging())
+	w, err := workers.New[int](ctx, workers.WithStartImmediately(), workers.WithDynamicPool(), workers.WithErrorTagging())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	panicID := "panic-task"
@@ -191,9 +191,9 @@ func TestErrorTagging_Panic_Tagged(t *testing.T) {
 func TestErrorTagging_Cancel_Tagged(t *testing.T) {
 	outerCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	w, err := workers.NewOptions[string](outerCtx, workers.WithStartImmediately(), workers.WithDynamicPool(), workers.WithErrorTagging())
+	w, err := workers.New[string](outerCtx, workers.WithStartImmediately(), workers.WithDynamicPool(), workers.WithErrorTagging())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	cancelID := "cancel-task"

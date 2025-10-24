@@ -128,9 +128,3 @@ func New[R interface{}](ctx context.Context, opts ...Option) (*Workers[R], error
 	w.initialize(ctx, &co.cfg)
 	return w, nil
 }
-
-// NewOptions is a deprecated alias retained for transitional compatibility.
-// Deprecated: Use New(ctx, opts...) instead.
-func NewOptions[R interface{}](ctx context.Context, opts ...Option) (*Workers[R], error) {
-	return New[R](ctx, opts...)
-}

@@ -12,7 +12,7 @@ import (
 // Ensures AddTask returns ErrInvalidState after cancellation triggered by StopOnError.
 func TestAddTask_ReturnsInvalidState_AfterStopOnErrorCancellation(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](
+	w, err := workers.New[int](
 		ctx,
 		workers.WithDynamicPool(),
 		workers.WithErrorsBuffer(1),      // outward buffered for prompt forward

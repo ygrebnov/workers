@@ -8,7 +8,7 @@ import "context"
 // fn are delivered via the returned errors channel.
 //
 // Lifecycle:
-//   - Constructs a Workers[R] via NewOptions(ctx, opts...) and starts it immediately.
+//   - Constructs a Workers[R] via New(ctx, opts...) and starts it immediately.
 //   - Spawns a forwarder goroutine that reads values from `in`, wraps them into tasks that
 //     call fn, and enqueues via AddTask. The forwarder waits for all started tasks to complete
 //     before invoking Close(), ensuring results/errors are closed after work is done.
@@ -21,7 +21,7 @@ import "context"
 func MapStream[T any, R any](
 	ctx context.Context, in <-chan T, fn func(context.Context, T) (R, error), opts ...Option,
 ) (results <-chan R, errors <-chan error, errOut error) {
-	w, err := NewOptions[R](ctx, opts...)
+	w, err := New[R](ctx, opts...)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -15,8 +15,8 @@ func TestCancelContext(t *testing.T) {
 		// immediate start tests.
 		{
 			name: "taskStringError_dynamic_startImmediately",
-			config: &workers.Config{
-				StartImmediately: true,
+			options: []workers.Option{
+				workers.WithStartImmediately(),
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -30,9 +30,9 @@ func TestCancelContext(t *testing.T) {
 		},
 		{
 			name: "taskStringError_fixed_startImmediately",
-			config: &workers.Config{
-				MaxWorkers:       uint(runtime.NumCPU()),
-				StartImmediately: true,
+			options: []workers.Option{
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithStartImmediately(),
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -47,8 +47,8 @@ func TestCancelContext(t *testing.T) {
 
 		{
 			name: "taskString_dynamic_startImmediately",
-			config: &workers.Config{
-				StartImmediately: true,
+			options: []workers.Option{
+				workers.WithStartImmediately(),
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -62,9 +62,9 @@ func TestCancelContext(t *testing.T) {
 		},
 		{
 			name: "taskString_fixed_startImmediately",
-			config: &workers.Config{
-				MaxWorkers:       uint(runtime.NumCPU()),
-				StartImmediately: true,
+			options: []workers.Option{
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithStartImmediately(),
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -79,8 +79,8 @@ func TestCancelContext(t *testing.T) {
 
 		{
 			name: "taskError_dynamic_startImmediately",
-			config: &workers.Config{
-				StartImmediately: true,
+			options: []workers.Option{
+				workers.WithStartImmediately(),
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -93,9 +93,9 @@ func TestCancelContext(t *testing.T) {
 		},
 		{
 			name: "taskError_fixed_startImmediately",
-			config: &workers.Config{
-				MaxWorkers:       uint(runtime.NumCPU()),
-				StartImmediately: true,
+			options: []workers.Option{
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithStartImmediately(),
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -110,8 +110,8 @@ func TestCancelContext(t *testing.T) {
 		// delayed start tests.
 		{
 			name: "taskStringError_dynamic_delayedStart",
-			config: &workers.Config{
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
+			options: []workers.Option{
+				workers.WithTasksBuffer(5), // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -126,9 +126,9 @@ func TestCancelContext(t *testing.T) {
 		},
 		{
 			name: "taskStringError_fixed_delayedStart",
-			config: &workers.Config{
-				MaxWorkers:      uint(runtime.NumCPU()),
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
+			options: []workers.Option{
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithTasksBuffer(5), // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -144,8 +144,8 @@ func TestCancelContext(t *testing.T) {
 
 		{
 			name: "taskString_dynamic_delayedStart",
-			config: &workers.Config{
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
+			options: []workers.Option{
+				workers.WithTasksBuffer(5), // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -160,9 +160,9 @@ func TestCancelContext(t *testing.T) {
 		},
 		{
 			name: "taskString_fixed_delayedStart",
-			config: &workers.Config{
-				MaxWorkers:      uint(runtime.NumCPU()),
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
+			options: []workers.Option{
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithTasksBuffer(5), // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -178,8 +178,8 @@ func TestCancelContext(t *testing.T) {
 
 		{
 			name: "taskError_dynamic_delayedStart",
-			config: &workers.Config{
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
+			options: []workers.Option{
+				workers.WithTasksBuffer(5), // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {
@@ -193,9 +193,9 @@ func TestCancelContext(t *testing.T) {
 		},
 		{
 			name: "taskError_fixed_delayedStart",
-			config: &workers.Config{
-				MaxWorkers:      uint(runtime.NumCPU()),
-				TasksBufferSize: 5, // the size is the same as the number of tasks.
+			options: []workers.Option{
+				workers.WithFixedPool(uint(runtime.NumCPU())),
+				workers.WithTasksBuffer(5), // the size is the same as the number of tasks.
 			},
 			nTasks: 5,
 			task: func(i int) workers.Task[string] {

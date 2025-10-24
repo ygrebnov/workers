@@ -11,9 +11,9 @@ import (
 
 func TestWorkers_PreserveOrder_Basic(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](ctx, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
+	w, err := workers.New[int](ctx, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	n := 8
@@ -52,9 +52,9 @@ func TestWorkers_PreserveOrder_Basic(t *testing.T) {
 
 func TestWorkers_PreserveOrder_SkipNoResult(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](ctx, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
+	w, err := workers.New[int](ctx, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	n := 10
@@ -102,9 +102,9 @@ func TestWorkers_PreserveOrder_SkipNoResult(t *testing.T) {
 
 func TestWorkers_PreserveOrder_ErrorWithSendResult_AdvancesCursor(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](ctx, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
+	w, err := workers.New[int](ctx, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	// Index 0: result
@@ -138,7 +138,7 @@ func TestWorkers_PreserveOrder_ErrorWithSendResult_AdvancesCursor(t *testing.T) 
 
 func TestWorkers_PreserveOrder_StopOnError_ContiguousPrefixOnly(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](ctx,
+	w, err := workers.New[int](ctx,
 		workers.WithDynamicPool(),
 		workers.WithStartImmediately(),
 		workers.WithPreserveOrder(),
@@ -146,7 +146,7 @@ func TestWorkers_PreserveOrder_StopOnError_ContiguousPrefixOnly(t *testing.T) {
 		workers.WithStopOnErrorBuffer(1),
 	)
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	// Fast results for indices 0,1,2
@@ -187,9 +187,9 @@ func TestWorkers_PreserveOrder_StopOnError_ContiguousPrefixOnly(t *testing.T) {
 func TestWorkers_PreserveOrder_ContextCancel_CleansUp_NoDeadlock(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	w, err := workers.NewOptions[int](ctx, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
+	w, err := workers.New[int](ctx, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	for i := 0; i < 50; i++ {
@@ -214,9 +214,9 @@ func TestWorkers_PreserveOrder_ContextCancel_CleansUp_NoDeadlock(t *testing.T) {
 
 func TestWorkers_PreserveOrder_Close_CleansUp_NoDeadlock(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](ctx, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
+	w, err := workers.New[int](ctx, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	for i := 0; i < 50; i++ {

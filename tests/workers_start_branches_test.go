@@ -32,7 +32,7 @@ func TestStart_ContextCancel_StopsDispatcher(t *testing.T) {
 // Covers Start when StopOnError is enabled and outward errors is buffered (sync forward path).
 func TestStart_StopOnError_BufferedOutward_SynchronousForward(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](
+	w, err := workers.New[int](
 		ctx,
 		workers.WithDynamicPool(),
 		workers.WithErrorsBuffer(1),      // outward has capacity
@@ -40,7 +40,7 @@ func TestStart_StopOnError_BufferedOutward_SynchronousForward(t *testing.T) {
 		workers.WithStopOnError(),
 	)
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	// Delayed start to exercise Start logic directly.
@@ -79,7 +79,7 @@ func TestStart_StopOnError_BufferedOutward_SynchronousForward(t *testing.T) {
 // Covers Start when StopOnError is enabled and outward errors is unbuffered (async forward via detached goroutine).
 func TestStart_StopOnError_UnbufferedOutward_AsyncForward(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](
+	w, err := workers.New[int](
 		ctx,
 		workers.WithDynamicPool(),
 		workers.WithErrorsBuffer(0),      // saturated outward when no reader
@@ -87,7 +87,7 @@ func TestStart_StopOnError_UnbufferedOutward_AsyncForward(t *testing.T) {
 		workers.WithStopOnError(),
 	)
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	// Delayed start to exercise Start logic directly.

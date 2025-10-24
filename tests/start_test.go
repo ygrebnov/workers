@@ -15,11 +15,6 @@ type contextKey string
 const key contextKey = "key"
 
 func Test_Start_ThreadSafety(t *testing.T) {
-	config := &workers.Config{
-		MaxWorkers:      5,
-		TasksBufferSize: 10,
-	}
-
 	n := int32(10)
 	ctxs := make([]context.Context, n)
 	for i := range n {
@@ -27,13 +22,13 @@ func Test_Start_ThreadSafety(t *testing.T) {
 	}
 
 	// initialize workers with equivalent options.
-	w, err := workers.NewOptions[string](
+	w, err := workers.New[string](
 		context.Background(),
-		workers.WithFixedPool(config.MaxWorkers),
-		workers.WithTasksBuffer(config.TasksBufferSize),
+		workers.WithFixedPool(5),
+		workers.WithTasksBuffer(10),
 	)
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	var wg sync.WaitGroup

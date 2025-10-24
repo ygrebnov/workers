@@ -34,7 +34,7 @@ func newWorkersForRunAll[R any](
 	// Ensure internal StopOnError buffer is large enough to avoid worker send blocking after cancellation.
 	opts = append(opts, WithStopOnErrorBuffer(uint(len(tasks))))
 
-	w, err = NewOptions[R](ctx, opts...)
+	w, err = New[R](ctx, opts...)
 	if err != nil {
 		return nil, nil, err
 	}

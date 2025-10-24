@@ -8,9 +8,9 @@ import (
 )
 
 func TestTaskTypeString(t *testing.T) {
-	c, err := workers.NewOptions[string](context.Background(), workers.WithTasksBuffer(5))
+	c, err := workers.New[string](context.Background(), workers.WithTasksBuffer(5))
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	// Valid (string, error)
@@ -30,9 +30,9 @@ func TestTaskTypeString(t *testing.T) {
 type testStruct struct{}
 
 func TestTaskTypePointerStruct(t *testing.T) {
-	c, err := workers.NewOptions[*testStruct](context.Background(), workers.WithTasksBuffer(5))
+	c, err := workers.New[*testStruct](context.Background(), workers.WithTasksBuffer(5))
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	// Valid (*testStruct, error)
@@ -50,9 +50,9 @@ func TestTaskTypePointerStruct(t *testing.T) {
 }
 
 func TestTaskTypeInterface(t *testing.T) {
-	c, err := workers.NewOptions[interface{}](context.Background(), workers.WithTasksBuffer(10))
+	c, err := workers.New[interface{}](context.Background(), workers.WithTasksBuffer(10))
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	// Valid (interface{}, error)
@@ -70,9 +70,9 @@ func TestTaskTypeInterface(t *testing.T) {
 }
 
 func TestTaskTypeFunc(t *testing.T) {
-	c, err := workers.NewOptions[func()](context.Background(), workers.WithTasksBuffer(10))
+	c, err := workers.New[func()](context.Background(), workers.WithTasksBuffer(10))
 	if err != nil {
-		t.Fatalf("NewOptions failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	if err := c.AddTask(workers.TaskFunc[func()](func(context.Context) (func(), error) { return nil, nil })); err != nil {

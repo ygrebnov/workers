@@ -12,7 +12,7 @@ import (
 // Ensures AddTask returns ErrInvalidState after cancellation when outward errors is unbuffered (async forward).
 func TestAddTask_ReturnsInvalidState_AfterStopOnErrorCancellation_UnbufferedOutward(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.NewOptions[int](
+	w, err := workers.New[int](
 		ctx,
 		workers.WithDynamicPool(),
 		workers.WithErrorsBuffer(0),      // outward unbuffered -> detached sender path
