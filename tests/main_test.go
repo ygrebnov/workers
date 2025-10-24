@@ -2,12 +2,12 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/ygrebnov/workers"
 )
@@ -92,13 +92,28 @@ func testFn(tc *testCase) func(*testing.T) {
 		for i := 1; i <= tc.nTasks; i++ {
 			if tc.expectedAddTaskError != nil && tc.expectedAddTaskError.i == i {
 				if tc.expectedAddTaskError.shouldPanic {
-					require.Panics(t, func() { _ = w.AddTask(tc.task(i)) })
+					func() {
+						deferred := false
+						defer func() {
+							if r := recover(); r == nil {
+								deferred = true
+								t.Errorf("expected panic when adding task %d, got none", i)
+							}
+						}()
+						_ = w.AddTask(tc.task(i))
+						_ = deferred
+					}()
 				} else {
-					require.ErrorContains(t, w.AddTask(tc.task(i)), tc.expectedAddTaskError.err)
+					err := w.AddTask(tc.task(i))
+					if err == nil || !strings.Contains(err.Error(), tc.expectedAddTaskError.err) {
+						t.Fatalf("expected error containing %q when adding task %d, got %v", tc.expectedAddTaskError.err, i, err)
+					}
 				}
 			} else {
 				err := w.AddTask(tc.task(i))
-				require.NoError(t, err, "Failed to add task to workers")
+				if err != nil {
+					t.Fatalf("Failed to add task to workers: %v", err)
+				}
 			}
 		}
 
@@ -130,7 +145,9 @@ func testFn(tc *testCase) func(*testing.T) {
 
 			for i := 1; i <= tc.nTasks; i++ {
 				err := w.AddTask(tc.task(i))
-				require.ErrorIs(t, err, workers.ErrInvalidState)
+				if !errors.Is(err, workers.ErrInvalidState) {
+					t.Fatalf("expected ErrInvalidState when adding task %d, got %v", i, err)
+				}
 			}
 
 			<-done2

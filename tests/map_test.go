@@ -3,10 +3,9 @@ package tests
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/ygrebnov/workers"
 )
@@ -26,15 +25,27 @@ func TestMap_Ordering_PreserveVsUnordered(t *testing.T) {
 
 	// Unordered (completion order): expect slow item (0) last
 	resUnordered, err := workers.Map[int, int](ctx, items, fn, workers.WithDynamicPool(), workers.WithStartImmediately())
-	require.NoError(t, err)
-	require.Len(t, resUnordered, 3)
-	require.NotEqual(t, 0, resUnordered[0], "expected completion-order to not start with the slow item")
-	require.Equal(t, 0, resUnordered[2], "expected slow item to complete last in unordered mode")
+	if err != nil {
+		t.Fatalf("Map unordered failed: %v", err)
+	}
+	if len(resUnordered) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(resUnordered))
+	}
+	if resUnordered[0] == 0 {
+		t.Fatalf("expected completion-order to not start with the slow item")
+	}
+	if resUnordered[2] != 0 {
+		t.Fatalf("expected slow item to complete last in unordered mode")
+	}
 
 	// Preserve order: results should match input order exactly
 	resOrdered, err := workers.Map[int, int](ctx, items, fn, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
-	require.NoError(t, err)
-	require.Equal(t, items, resOrdered)
+	if err != nil {
+		t.Fatalf("Map ordered failed: %v", err)
+	}
+	if !reflect.DeepEqual(items, resOrdered) {
+		t.Fatalf("unexpected ordered results: got=%v want=%v", resOrdered, items)
+	}
 }
 
 func TestMap_StopOnError_Sequential(t *testing.T) {
@@ -63,10 +74,11 @@ func TestMap_StopOnError_Sequential(t *testing.T) {
 		workers.WithStartImmediately(),
 		workers.WithStopOnError(),
 	)
-	require.Error(t, err)
+	if err == nil {
+		t.Fatalf("expected error with StopOnError, got nil; results=%v", res)
+	}
 	// With StopOnError, after task 1 fails, the context is cancelled.
 	// Some tasks may have already started and could complete or get cancelled.
 	// The key validation is that we got an error (which we checked above).
-	// Results are non-deterministic due to scheduler timing, but that's expected.
-	_ = res // We got an error, which is what StopOnError guarantees
+	_ = res // Results are non-deterministic; error is what StopOnError guarantees
 }

@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/ygrebnov/workers"
 )
 
@@ -46,11 +44,15 @@ func Test_Start_ThreadSafety(t *testing.T) {
 
 			err := w.AddTask(workers.TaskFunc[string](func(ctx context.Context) (string, error) {
 				val, ok := ctx.Value(key).(string)
-				require.True(t, ok, "Expected value to be of type string")
+				if !ok {
+					t.Errorf("Expected value to be of type string")
+				}
 
 				return val, nil
 			}))
-			require.NoError(t, err, "Failed to add task to workers")
+			if err != nil {
+				t.Errorf("Failed to add task to workers: %v", err)
+			}
 		}()
 	}
 
@@ -71,7 +73,9 @@ func Test_Start_ThreadSafety(t *testing.T) {
 			t.Errorf("unexpected error: %v", e)
 		}
 	}
-	require.Len(t, results, 1, "Expected only one unique result, but got %d", len(results))
+	if len(results) != 1 {
+		t.Errorf("Expected only one unique result, but got %d", len(results))
+	}
 
 	close(w.GetResults())
 	close(w.GetErrors())
