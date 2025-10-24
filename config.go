@@ -1,7 +1,7 @@
 package workers
 
-// Config holds Workers configuration.
-type Config struct {
+// config holds Workers configuration.
+type config struct {
 	// MaxWorkers defines workers pool maximum size.
 	// Zero (default) means that the size will be set dynamically.
 	// Zero value is suitable for the majority of cases.
@@ -46,10 +46,10 @@ type Config struct {
 	PreserveOrder bool
 }
 
-// defaultConfig centralizes default values for Config.
-// These defaults are applied by both New (when cfg is nil) and NewOptions (options builder base).
-func defaultConfig() Config {
-	return Config{
+// defaultConfig centralizes default values for config.
+// These defaults are applied by both initialize (when cfg is nil) and New (options builder base).
+func defaultConfig() config {
+	return config{
 		MaxWorkers:                  0,     // dynamic pool
 		StartImmediately:            false, // explicit Start by default
 		StopOnError:                 false,
@@ -64,7 +64,7 @@ func defaultConfig() Config {
 
 // validateConfig performs lightweight invariants checks.
 // It returns nil for all currently valid states; reserved for future validation expansions.
-func validateConfig(_ *Config) error {
+func validateConfig(_ *config) error {
 	// MaxWorkers == 0 -> dynamic pool; >0 -> fixed-size pool.
 	// All buffer sizes are uint; zero is a valid choice (unbuffered) except we provide non-zero defaults above.
 	// No hard validation required at the moment.
