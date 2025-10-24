@@ -8,7 +8,10 @@ import (
 )
 
 func TestTaskTypeString(t *testing.T) {
-	c := workers.New[string](context.Background(), &workers.Config{TasksBufferSize: 5})
+	c, err := workers.NewOptions[string](context.Background(), workers.WithTasksBuffer(5))
+	if err != nil {
+		t.Fatalf("NewOptions failed: %v", err)
+	}
 
 	// Valid (string, error)
 	if err := c.AddTask(workers.TaskFunc[string](func(context.Context) (string, error) { return "", nil })); err != nil {
@@ -27,7 +30,10 @@ func TestTaskTypeString(t *testing.T) {
 type testStruct struct{}
 
 func TestTaskTypePointerStruct(t *testing.T) {
-	c := workers.New[*testStruct](context.Background(), &workers.Config{TasksBufferSize: 5})
+	c, err := workers.NewOptions[*testStruct](context.Background(), workers.WithTasksBuffer(5))
+	if err != nil {
+		t.Fatalf("NewOptions failed: %v", err)
+	}
 
 	// Valid (*testStruct, error)
 	if err := c.AddTask(workers.TaskFunc[*testStruct](func(context.Context) (*testStruct, error) { return &testStruct{}, nil })); err != nil {
@@ -44,7 +50,10 @@ func TestTaskTypePointerStruct(t *testing.T) {
 }
 
 func TestTaskTypeInterface(t *testing.T) {
-	c := workers.New[interface{}](context.Background(), &workers.Config{TasksBufferSize: 10})
+	c, err := workers.NewOptions[interface{}](context.Background(), workers.WithTasksBuffer(10))
+	if err != nil {
+		t.Fatalf("NewOptions failed: %v", err)
+	}
 
 	// Valid (interface{}, error)
 	if err := c.AddTask(workers.TaskFunc[interface{}](func(context.Context) (interface{}, error) { return nil, nil })); err != nil {
@@ -61,7 +70,10 @@ func TestTaskTypeInterface(t *testing.T) {
 }
 
 func TestTaskTypeFunc(t *testing.T) {
-	c := workers.New[func()](context.Background(), &workers.Config{TasksBufferSize: 10})
+	c, err := workers.NewOptions[func()](context.Background(), workers.WithTasksBuffer(10))
+	if err != nil {
+		t.Fatalf("NewOptions failed: %v", err)
+	}
 
 	if err := c.AddTask(workers.TaskFunc[func()](func(context.Context) (func(), error) { return nil, nil })); err != nil {
 		t.Fatalf("AddTask failed: %v", err)

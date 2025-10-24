@@ -99,14 +99,23 @@ func BenchmarkWorkers(b *testing.B) {
 	for _, test := range tests {
 		b.Run(test.name, func(b *testing.B) {
 			for range b.N {
-				w := workers.New[string](
-					context.Background(),
-					&workers.Config{
-						MaxWorkers:       test.maxWorkers,
-						StartImmediately: test.startImmediately,
-						TasksBufferSize:  uint(test.bufferSize),
-					},
-				)
+				opts := make([]workers.Option, 0, 3)
+				if test.maxWorkers > 0 {
+					opts = append(opts, workers.WithFixedPool(test.maxWorkers))
+				} else {
+					// Dynamic pool is the default; no option needed
+				}
+				if test.bufferSize > 0 {
+					opts = append(opts, workers.WithTasksBuffer(uint(test.bufferSize)))
+				}
+				if test.startImmediately {
+					opts = append(opts, workers.WithStartImmediately())
+				}
+
+				w, err := workers.NewOptions[string](context.Background(), opts...)
+				if err != nil {
+					b.Fatal(err)
+				}
 
 				wg := sync.WaitGroup{}
 
@@ -122,8 +131,7 @@ func BenchmarkWorkers(b *testing.B) {
 
 				for _, task := range test.tasks {
 					wg.Add(1)
-					err := w.AddTask(task)
-					if err != nil {
+					if err := w.AddTask(task); err != nil {
 						b.Fatal(err)
 					}
 				}

@@ -26,8 +26,15 @@ func Test_Start_ThreadSafety(t *testing.T) {
 		ctxs[i] = context.WithValue(context.Background(), key, fmt.Sprintf("value%d", i))
 	}
 
-	// initialize workers with context which is not in ctxs.
-	w := workers.New[string](context.Background(), config)
+	// initialize workers with equivalent options.
+	w, err := workers.NewOptions[string](
+		context.Background(),
+		workers.WithFixedPool(config.MaxWorkers),
+		workers.WithTasksBuffer(config.TasksBufferSize),
+	)
+	if err != nil {
+		t.Fatalf("NewOptions failed: %v", err)
+	}
 
 	var wg sync.WaitGroup
 	startCount := int32(0)

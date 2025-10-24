@@ -11,7 +11,10 @@ import (
 func TestDefaultsParity_New_vs_NewOptions(t *testing.T) {
 	ctx := context.Background()
 
-	w1 := workers.New[int](ctx, nil)
+	w1, err := workers.NewOptions[int](ctx)
+	if err != nil {
+		t.Fatalf("NewOptions failed: %v", err)
+	}
 	w2, err := workers.NewOptions[int](ctx)
 	if err != nil {
 		t.Fatalf("NewOptions failed: %v", err)
