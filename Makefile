@@ -8,13 +8,6 @@ include $(CURDIR)/tools/tools.mk
 # Path to benchstat installed by tools.mk
 BENCHSTAT := $(CURDIR)/tools/bin/benchstat
 
-clean:
-	@go clean -testcache
-	@rm -rf $(COVERAGE_PATH)
-
-dir-coverage:
-	@mkdir -p $(COVERAGE_PATH)
-
 dir-profiling:
 	@mkdir -p $(PROFILING_PATH)
 
@@ -24,7 +17,11 @@ dir-bench:
 lint: install-golangci-lint
 	$(GOLANGCI_LINT) run
 
-test: dir-coverage
+test:
+	@echo "Running tests with coverage..."
+	@go clean -testcache
+	@rm -rf $(COVERAGE_PATH)
+	@mkdir -p $(COVERAGE_PATH)
 	@go test -v -coverpkg=./... ./... -coverprofile $(COVERAGE_PATH)coverage.txt
 	@go tool cover -func=$(COVERAGE_PATH)coverage.txt -o $(COVERAGE_PATH)functions.txt
 	@go tool cover -html=$(COVERAGE_PATH)coverage.txt -o $(COVERAGE_PATH)coverage.html
@@ -57,4 +54,4 @@ test-pprof: dir-profiling
 	@go test ./tests/... -memprofile $(PROFILING_PATH)mem.prof
 	@go tool pprof -http :8080 $(PROFILING_PATH)mem.prof
 
-.PHONY: clean dir-coverage dir-profiling dir-bench lint test test-race bench bench-save bench-compare test-pprof
+.PHONY: dir-profiling dir-bench lint test test-race bench bench-save bench-compare test-pprof
