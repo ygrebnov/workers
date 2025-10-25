@@ -49,6 +49,9 @@ type Workers[R interface{}] struct {
 	// closed during Close to unblock any pending detached senders safely
 	closeCh chan struct{}
 
+	// track dispatcher goroutine to ensure it exits before inflight.Wait
+	dispatcherWG sync.WaitGroup
+
 	// sequence counter for tasks accepted via AddTask (used for error tagging and preserve-order indexing)
 	seq uint64
 
@@ -158,7 +161,11 @@ func (w *Workers[R]) Start(ctx context.Context) {
 		w.startErrorForwarderIfNeeded()
 		w.startReordererIfNeeded()
 		d := newDispatcher[R](w.tasks, &w.inflight, w.pool)
-		go d.run(w.ctx)
+		w.dispatcherWG.Add(1)
+		go func() {
+			defer w.dispatcherWG.Done()
+			d.run(w.ctx)
+		}()
 	})
 }
 
@@ -266,6 +273,7 @@ func (w *Workers[R]) Close() {
 			func() { w.reorderWG.Wait() },
 			func() { close(w.results) },
 			func() { close(w.errors) },
+			&w.dispatcherWG,
 		)
 		lc.Close()
 	})
