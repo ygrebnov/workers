@@ -47,6 +47,7 @@ func collectErrorsWithTimeoutMS(t *testing.T, ch <-chan error, d time.Duration) 
 }
 
 func TestMapStream_HappyPath(t *testing.T) {
+	// TODO: check test, may return an error.
 	ctx := context.Background()
 	in := make(chan int, 16)
 
