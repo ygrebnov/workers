@@ -8,7 +8,7 @@ import (
 	"github.com/ygrebnov/workers"
 )
 
-var errorTaskContextCancelled = "task execution cancelled: " + context.DeadlineExceeded.Error()
+var errorTaskContextCancelled = "workers: task execution cancelled: " + context.DeadlineExceeded.Error()
 
 func TestCancelContext(t *testing.T) {
 	tests := []testCase{

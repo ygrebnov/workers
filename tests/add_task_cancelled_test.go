@@ -14,7 +14,6 @@ func TestAddTask_ReturnsInvalidState_AfterStopOnErrorCancellation(t *testing.T) 
 	ctx := context.Background()
 	w, err := workers.New[int](
 		ctx,
-		workers.WithDynamicPool(),
 		workers.WithErrorsBuffer(1),      // outward buffered for prompt forward
 		workers.WithStopOnErrorBuffer(1), // small internal buffer
 		workers.WithStopOnError(),

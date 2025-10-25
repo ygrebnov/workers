@@ -14,7 +14,7 @@ func TestForEachStream_HappyPath(t *testing.T) {
 	ctx := context.Background()
 	in := make(chan int, 16)
 
-	errs, err := workers.ForEachStream[int](ctx, in, func(ctx context.Context, v int) error { return nil }, workers.WithDynamicPool())
+	errs, err := workers.ForEachStream[int](ctx, in, func(ctx context.Context, v int) error { return nil })
 	if err != nil {
 		t.Fatalf("ForEachStream setup error: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestForEachStream_ContextCancel(t *testing.T) {
 	errs, err := workers.ForEachStream[int](ctx, in, func(ctx context.Context, v int) error {
 		time.Sleep(150 * time.Millisecond)
 		return nil
-	}, workers.WithDynamicPool())
+	})
 	if err != nil {
 		t.Fatalf("ForEachStream setup error: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestForEachStream_ClosesErrors_OnInputClose(t *testing.T) {
 	errs, err := workers.ForEachStream[int](ctx, in, func(ctx context.Context, v int) error {
 		processed <- v
 		return nil
-	}, workers.WithDynamicPool())
+	})
 	if err != nil {
 		t.Fatalf("ForEachStream setup error: %v", err)
 	}

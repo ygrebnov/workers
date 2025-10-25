@@ -22,7 +22,7 @@ func TestRunAll_HappyPath(t *testing.T) {
 		expected = append(expected, i*2)
 	}
 
-	results, err := workers.RunAll[int](ctx, tasks, workers.WithDynamicPool())
+	results, err := workers.RunAll[int](ctx, tasks)
 	if err != nil {
 		t.Fatalf("RunAll failed: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestRunAll_ContextTimeout(t *testing.T) {
 		workers.TaskValue[int](func(ctx context.Context) int { time.Sleep(150 * time.Millisecond); return 2 }),
 	}
 
-	results, err := workers.RunAll[int](ctx, tasks, workers.WithDynamicPool())
+	results, err := workers.RunAll[int](ctx, tasks)
 	// Expect context cancellation to surface through task errors aggregation.
 	if err == nil {
 		t.Fatalf("expected error due to context timeout, got nil")

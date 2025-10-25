@@ -1,5 +1,9 @@
 package workers
 
+import (
+	"github.com/ygrebnov/errorc"
+)
+
 // config holds Workers configuration.
 type config struct {
 	// MaxWorkers defines workers pool maximum size.
@@ -69,4 +73,82 @@ func validateConfig(_ *config) error {
 	// All buffer sizes are uint; zero is a valid choice (unbuffered) except we provide non-zero defaults above.
 	// No hard validation required at the moment.
 	return nil
+}
+
+// Option configures Workers. Use New(ctx, opts...) to construct Workers via options.
+// Breaking change: Option now returns an error on invalid input instead of panicking.
+type Option func(*config) error
+
+// // Internal builder state for options assembly.
+// type configOptions struct {
+// 	cfg          config
+// 	poolSelected poolType
+// }
+//
+// type poolType int
+//
+// const (
+// 	poolUnspecified poolType = iota
+// 	poolDynamic
+// 	poolFixed
+// )
+//
+// var errFixedDynamicPoolOptionsConflict = errorc.With(
+// 	ErrInvalidOption,
+// 	errorc.String(
+// 		"",
+// 		"conflicting pool options: WithFixedPool and WithDynamicPool both specified",
+// 	),
+// )
+
+// WithFixedPool selects a fixed-size worker pool with the given capacity (must be > 0).
+func WithFixedPool(n uint) Option {
+	return func(cfg *config) error {
+		if n == 0 {
+			return errorc.With(ErrInvalidConfig, errorc.String("", "WithFixedPool requires n > 0"))
+		}
+		cfg.MaxWorkers = n
+		return nil
+	}
+}
+
+// WithTasksBuffer sets the size of the tasks channel buffer.
+func WithTasksBuffer(size uint) Option {
+	return func(cfg *config) error { cfg.TasksBufferSize = size; return nil }
+}
+
+// WithResultsBuffer sets the size of the results channel buffer (default 1024).
+func WithResultsBuffer(size uint) Option {
+	return func(cfg *config) error { cfg.ResultsBufferSize = size; return nil }
+}
+
+// WithErrorsBuffer sets the size of the outgoing errors channel buffer (default 1024).
+func WithErrorsBuffer(size uint) Option {
+	return func(cfg *config) error { cfg.ErrorsBufferSize = size; return nil }
+}
+
+// WithStopOnErrorBuffer sets the size of the internal errors buffer used when StopOnError is enabled (default 100).
+func WithStopOnErrorBuffer(size uint) Option {
+	return func(cfg *config) error { cfg.StopOnErrorErrorsBufferSize = size; return nil }
+}
+
+// WithStartImmediately starts workers execution immediately.
+func WithStartImmediately() Option {
+	return func(cfg *config) error { cfg.StartImmediately = true; return nil }
+}
+
+// WithStopOnError stops tasks execution when the first error occurs.
+func WithStopOnError() Option {
+	return func(cfg *config) error { cfg.StopOnError = true; return nil }
+}
+
+// WithErrorTagging enables wrapping task errors with task metadata (ID and index).
+func WithErrorTagging() Option {
+	return func(cfg *config) error { cfg.ErrorTagging = true; return nil }
+}
+
+// WithPreserveOrder enforces emitting results in input order at the core level.
+// When enabled, Workers reorder completed tasks and only deliver results in index order.
+func WithPreserveOrder() Option {
+	return func(cfg *config) error { cfg.PreserveOrder = true; return nil }
 }

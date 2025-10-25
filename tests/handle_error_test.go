@@ -20,7 +20,7 @@ func TestHandleError(t *testing.T) {
 				return workers.TaskFunc[string](newTaskStringError(i, true, true, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 4, 5),
-			expectedErrors:  []string{"error executing task for: 3"},
+			expectedErrors:  []string{executionErrorMsg(3)},
 		},
 		{
 			name: "taskStringError_fixed_startImmediately",
@@ -33,7 +33,7 @@ func TestHandleError(t *testing.T) {
 				return workers.TaskFunc[string](newTaskStringError(i, true, true, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 4, 5),
-			expectedErrors:  []string{"error executing task for: 3"},
+			expectedErrors:  []string{executionErrorMsg(3)},
 		},
 
 		{
@@ -78,7 +78,7 @@ func TestHandleError(t *testing.T) {
 				return workers.TaskError[string](newTaskErr(i, true, true, false))
 			},
 			expectedResults: []string{},
-			expectedErrors:  []string{"error executing task for: 3"},
+			expectedErrors:  []string{executionErrorMsg(3)},
 		},
 		{
 			name: "taskError_fixed_startImmediately",
@@ -91,7 +91,7 @@ func TestHandleError(t *testing.T) {
 				return workers.TaskError[string](newTaskErr(i, true, true, false))
 			},
 			expectedResults: []string{},
-			expectedErrors:  []string{"error executing task for: 3"},
+			expectedErrors:  []string{executionErrorMsg(3)},
 		},
 
 		// delayed start, do not stop on error.
@@ -105,7 +105,7 @@ func TestHandleError(t *testing.T) {
 				return workers.TaskFunc[string](newTaskStringError(i, true, true, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 4, 5),
-			expectedErrors:  []string{"error executing task for: 3"},
+			expectedErrors:  []string{executionErrorMsg(3)},
 			delayedStart:    true,
 		},
 		{
@@ -119,7 +119,7 @@ func TestHandleError(t *testing.T) {
 				return workers.TaskFunc[string](newTaskStringError(i, true, true, false))
 			},
 			expectedResults: getExpectedResults(1, 2, 4, 5),
-			expectedErrors:  []string{"error executing task for: 3"},
+			expectedErrors:  []string{executionErrorMsg(3)},
 			delayedStart:    true,
 		},
 
@@ -167,7 +167,7 @@ func TestHandleError(t *testing.T) {
 				return workers.TaskError[string](newTaskErr(i, true, true, false))
 			},
 			expectedResults: []string{},
-			expectedErrors:  []string{"error executing task for: 3"},
+			expectedErrors:  []string{executionErrorMsg(3)},
 			delayedStart:    true,
 		},
 		{
@@ -181,7 +181,7 @@ func TestHandleError(t *testing.T) {
 				return workers.TaskError[string](newTaskErr(i, true, true, false))
 			},
 			expectedResults: []string{},
-			expectedErrors:  []string{"error executing task for: 3"},
+			expectedErrors:  []string{executionErrorMsg(3)},
 			delayedStart:    true,
 		},
 
@@ -198,7 +198,7 @@ func TestHandleError(t *testing.T) {
 			},
 			// expectedResults: getExpectedResults(1, 2),
 			expectedMaxResults: ptrInt(4),
-			expectedErrors:     []string{"error executing task for: 3"},
+			expectedErrors:     []string{executionErrorMsg(3)},
 		},
 		{
 			name: "taskStringError_fixed_startImmediately_stopOnError",
@@ -213,7 +213,7 @@ func TestHandleError(t *testing.T) {
 			},
 			// expectedResults: getExpectedResults(1, 2),
 			expectedMaxResults: ptrInt(4),
-			expectedErrors:     []string{"error executing task for: 3"},
+			expectedErrors:     []string{executionErrorMsg(3)},
 		},
 
 		{
