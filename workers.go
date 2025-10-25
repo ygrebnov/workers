@@ -64,6 +64,28 @@ type noCopy struct{}
 func (*noCopy) Lock()   {}
 func (*noCopy) Unlock() {}
 
+// New creates a new Workers instance using functional options.
+// It assembles an internal config and initializes the controller.
+func New[R interface{}](ctx context.Context, opts ...Option) (*Workers[R], error) {
+	cfg := defaultConfig()
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(&cfg); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := validateConfig(&cfg); err != nil {
+		return nil, err
+	}
+
+	w := &Workers[R]{}
+	w.initialize(ctx, &cfg)
+	return w, nil
+}
+
 // initialize sets up the Workers controller using the provided configuration.
 // If cfg is nil, defaults are applied. If StartImmediately is set, Start(ctx) is called.
 func (w *Workers[R]) initialize(ctx context.Context, cfg *config) {

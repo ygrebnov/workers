@@ -156,7 +156,6 @@ func BenchmarkPools_Matrix256_64Tasks(b *testing.B) {
 			_, err := workers.RunAll[float64](
 				ctx,
 				tasks,
-				workers.WithDynamicPool(),
 				workers.WithStartImmediately(),
 			)
 			if err != nil {
@@ -171,7 +170,6 @@ func BenchmarkPools_Matrix256_64Tasks(b *testing.B) {
 			_, err := workers.RunAll[float64](
 				ctx,
 				tasks,
-				workers.WithDynamicPool(),
 				workers.WithStartImmediately(),
 				workers.WithPreserveOrder(),
 			)
@@ -245,7 +243,6 @@ func BenchmarkPools_Alloc4MiB_64Tasks(b *testing.B) {
 			_, err := workers.RunAll[float64](
 				ctx,
 				tasks,
-				workers.WithDynamicPool(),
 				workers.WithStartImmediately(),
 			)
 			if err != nil {
@@ -260,7 +257,6 @@ func BenchmarkPools_Alloc4MiB_64Tasks(b *testing.B) {
 			_, err := workers.RunAll[float64](
 				ctx,
 				tasks,
-				workers.WithDynamicPool(),
 				workers.WithStartImmediately(),
 				workers.WithPreserveOrder(),
 			)

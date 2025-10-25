@@ -42,7 +42,6 @@ func TestRunAll_ErrorTagging_PreservesIDAndIndex(t *testing.T) {
 		ctx,
 		tasks,
 		workers.WithErrorTagging(),
-		workers.WithDynamicPool(),
 		workers.WithStartImmediately(),
 		workers.WithPreserveOrder(),
 	)

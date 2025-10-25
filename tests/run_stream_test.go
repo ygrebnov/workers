@@ -52,7 +52,7 @@ func TestRunStream_HappyPath(t *testing.T) {
 	ctx := context.Background()
 	in := make(chan workers.Task[int], 8)
 
-	out, errs, err := workers.RunStream[int](ctx, in, workers.WithDynamicPool())
+	out, errs, err := workers.RunStream[int](ctx, in)
 	if err != nil {
 		t.Fatalf("RunStream setup error: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestRunStream_StopOnError_StopsForwardingAndCloses(t *testing.T) {
 	ctx := context.Background()
 	in := make(chan workers.Task[int], 8)
 
-	out, errs, err := workers.RunStream[int](ctx, in, workers.WithDynamicPool(), workers.WithStopOnError())
+	out, errs, err := workers.RunStream[int](ctx, in, workers.WithStopOnError())
 	if err != nil {
 		t.Fatalf("RunStream setup error: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestRunStream_PreserveOrder(t *testing.T) {
 	ctx := context.Background()
 	in := make(chan workers.Task[int], 8)
 
-	out, errs, err := workers.RunStream[int](ctx, in, workers.WithDynamicPool(), workers.WithPreserveOrder())
+	out, errs, err := workers.RunStream[int](ctx, in, workers.WithPreserveOrder())
 	if err != nil {
 		t.Fatalf("RunStream setup error: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestRunStream_ContextCancel(t *testing.T) {
 	defer cancel()
 	in := make(chan workers.Task[int], 8)
 
-	out, errs, err := workers.RunStream[int](ctx, in, workers.WithDynamicPool())
+	out, errs, err := workers.RunStream[int](ctx, in)
 	if err != nil {
 		t.Fatalf("RunStream setup error: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestRunStream_ClosesChannels_OnInputClose(t *testing.T) {
 	ctx := context.Background()
 	in := make(chan workers.Task[int], 8)
 
-	out, errs, err := workers.RunStream[int](ctx, in, workers.WithDynamicPool())
+	out, errs, err := workers.RunStream[int](ctx, in)
 	if err != nil {
 		t.Fatalf("RunStream setup error: %v", err)
 	}

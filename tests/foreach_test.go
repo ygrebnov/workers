@@ -18,7 +18,6 @@ func TestForEach_AllSucceed(t *testing.T) {
 		ctx,
 		items,
 		fn,
-		workers.WithDynamicPool(),
 		workers.WithStartImmediately(),
 	)
 	if err != nil {
@@ -49,7 +48,6 @@ func TestForEach_StopOnError_ReturnsError(t *testing.T) {
 		ctx,
 		items,
 		fn,
-		workers.WithDynamicPool(),
 		workers.WithStartImmediately(),
 		workers.WithStopOnError(),
 	)
@@ -67,7 +65,6 @@ func TestForEach_Panic_PropagatesErrTaskPanicked(t *testing.T) {
 		ctx,
 		items,
 		fn,
-		workers.WithDynamicPool(),
 		workers.WithStartImmediately(),
 	)
 	if err == nil {

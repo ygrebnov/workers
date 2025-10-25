@@ -233,3 +233,11 @@ func checkResults(
 		}
 	}
 }
+
+func executionErrorMsg(i int) string {
+	return fmt.Sprintf("error executing task for: %d", i)
+}
+
+func panicErrorMsg(i int) string {
+	return fmt.Sprintf("workers: task execution panicked: panic on executing task for: %d", i)
+}

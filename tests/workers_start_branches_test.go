@@ -34,7 +34,6 @@ func TestStart_StopOnError_BufferedOutward_SynchronousForward(t *testing.T) {
 	ctx := context.Background()
 	w, err := workers.New[int](
 		ctx,
-		workers.WithDynamicPool(),
 		workers.WithErrorsBuffer(1),      // outward has capacity
 		workers.WithStopOnErrorBuffer(1), // small internal buffer
 		workers.WithStopOnError(),
@@ -81,7 +80,6 @@ func TestStart_StopOnError_UnbufferedOutward_AsyncForward(t *testing.T) {
 	ctx := context.Background()
 	w, err := workers.New[int](
 		ctx,
-		workers.WithDynamicPool(),
 		workers.WithErrorsBuffer(0),      // saturated outward when no reader
 		workers.WithStopOnErrorBuffer(1), // small internal buffer
 		workers.WithStopOnError(),

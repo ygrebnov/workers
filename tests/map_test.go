@@ -24,7 +24,7 @@ func TestMap_Ordering_PreserveVsUnordered(t *testing.T) {
 	}
 
 	// Unordered (completion order): expect slow item (0) last
-	resUnordered, err := workers.Map[int, int](ctx, items, fn, workers.WithDynamicPool(), workers.WithStartImmediately())
+	resUnordered, err := workers.Map[int, int](ctx, items, fn, workers.WithStartImmediately())
 	if err != nil {
 		t.Fatalf("Map unordered failed: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestMap_Ordering_PreserveVsUnordered(t *testing.T) {
 	}
 
 	// Preserve order: results should match input order exactly
-	resOrdered, err := workers.Map[int, int](ctx, items, fn, workers.WithDynamicPool(), workers.WithStartImmediately(), workers.WithPreserveOrder())
+	resOrdered, err := workers.Map[int, int](ctx, items, fn, workers.WithStartImmediately(), workers.WithPreserveOrder())
 	if err != nil {
 		t.Fatalf("Map ordered failed: %v", err)
 	}
@@ -70,7 +70,6 @@ func TestMap_StopOnError_Sequential(t *testing.T) {
 		ctx,
 		items,
 		fn,
-		workers.WithDynamicPool(),
 		workers.WithStartImmediately(),
 		workers.WithStopOnError(),
 	)

@@ -14,7 +14,6 @@ func TestAddTask_ReturnsInvalidState_AfterStopOnErrorCancellation_UnbufferedOutw
 	ctx := context.Background()
 	w, err := workers.New[int](
 		ctx,
-		workers.WithDynamicPool(),
 		workers.WithErrorsBuffer(0),      // outward unbuffered -> detached sender path
 		workers.WithStopOnErrorBuffer(1), // small internal buffer
 		workers.WithStopOnError(),

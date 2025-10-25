@@ -13,7 +13,7 @@ import (
 
 func TestErrorTagging_Disabled_NoMeta(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.New[string](ctx, workers.WithStartImmediately(), workers.WithDynamicPool())
+	w, err := workers.New[string](ctx, workers.WithStartImmediately())
 	if err != nil {
 		t.Fatalf("New failed: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestErrorTagging_Disabled_NoMeta(t *testing.T) {
 
 func TestErrorTagging_Enabled_AssignsIDAndIndex(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.New[string](ctx, workers.WithStartImmediately(), workers.WithDynamicPool(), workers.WithErrorTagging())
+	w, err := workers.New[string](ctx, workers.WithStartImmediately(), workers.WithErrorTagging())
 	if err != nil {
 		t.Fatalf("New failed: %v", err)
 	}
@@ -110,7 +110,6 @@ func TestErrorTagging_StopOnError_FirstTagged(t *testing.T) {
 	w, err := workers.New[string](
 		ctx,
 		workers.WithStartImmediately(),
-		workers.WithDynamicPool(),
 		workers.WithErrorTagging(),
 		workers.WithStopOnError(),
 	)
@@ -152,7 +151,7 @@ func TestErrorTagging_StopOnError_FirstTagged(t *testing.T) {
 
 func TestErrorTagging_Panic_Tagged(t *testing.T) {
 	ctx := context.Background()
-	w, err := workers.New[int](ctx, workers.WithStartImmediately(), workers.WithDynamicPool(), workers.WithErrorTagging())
+	w, err := workers.New[int](ctx, workers.WithStartImmediately(), workers.WithErrorTagging())
 	if err != nil {
 		t.Fatalf("New failed: %v", err)
 	}
@@ -191,7 +190,7 @@ func TestErrorTagging_Panic_Tagged(t *testing.T) {
 func TestErrorTagging_Cancel_Tagged(t *testing.T) {
 	outerCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	w, err := workers.New[string](outerCtx, workers.WithStartImmediately(), workers.WithDynamicPool(), workers.WithErrorTagging())
+	w, err := workers.New[string](outerCtx, workers.WithStartImmediately(), workers.WithErrorTagging())
 	if err != nil {
 		t.Fatalf("New failed: %v", err)
 	}

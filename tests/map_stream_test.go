@@ -50,7 +50,7 @@ func TestMapStream_HappyPath(t *testing.T) {
 	ctx := context.Background()
 	in := make(chan int, 16)
 
-	out, errs, err := workers.MapStream[int, int](ctx, in, func(ctx context.Context, v int) (int, error) { return v * 2, nil }, workers.WithDynamicPool())
+	out, errs, err := workers.MapStream[int, int](ctx, in, func(ctx context.Context, v int) (int, error) { return v * 2, nil })
 	if err != nil {
 		t.Fatalf("MapStream setup error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestMapStream_PreserveOrder(t *testing.T) {
 
 	out, errs, err := workers.MapStream[int, int](ctx, in, func(ctx context.Context, v int) (int, error) {
 		return v, nil
-	}, workers.WithDynamicPool(), workers.WithPreserveOrder())
+	}, workers.WithPreserveOrder())
 	if err != nil {
 		t.Fatalf("MapStream setup error: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestMapStream_ContextCancel(t *testing.T) {
 	out, errs, err := workers.MapStream[int, int](ctx, in, func(ctx context.Context, v int) (int, error) {
 		time.Sleep(150 * time.Millisecond)
 		return v, nil
-	}, workers.WithDynamicPool())
+	})
 	if err != nil {
 		t.Fatalf("MapStream setup error: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestMapStream_ClosesChannels_OnInputClose(t *testing.T) {
 	ctx := context.Background()
 	in := make(chan int, 8)
 
-	out, errs, err := workers.MapStream[int, int](ctx, in, func(ctx context.Context, v int) (int, error) { return v, nil }, workers.WithDynamicPool())
+	out, errs, err := workers.MapStream[int, int](ctx, in, func(ctx context.Context, v int) (int, error) { return v, nil })
 	if err != nil {
 		t.Fatalf("MapStream setup error: %v", err)
 	}
