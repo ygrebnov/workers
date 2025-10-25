@@ -52,6 +52,7 @@ func TestLifecycle_OrderAndSignals(t *testing.T) {
 		waitReorderer,
 		closeResults,
 		closeErrors,
+		&sync.WaitGroup{}, // dispatcherWG
 	)
 
 	done := make(chan struct{})
@@ -134,6 +135,7 @@ func TestLifecycle_Idempotent_ConcurrentClose(t *testing.T) {
 		waitReorderer,
 		closeResults,
 		closeErrors,
+		&sync.WaitGroup{}, // dispatcherWG
 	)
 
 	// call Close concurrently

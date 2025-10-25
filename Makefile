@@ -17,14 +17,20 @@ dir-bench:
 lint: install-golangci-lint
 	$(GOLANGCI_LINT) run
 
+# Run tests with coverage and produce function/HTML reports.
+# Some environments may include stale file paths in the coverage profile.
+# Filter the profile to only include files that actually exist before invoking go tool cover.
 test:
 	@echo "Running tests with coverage..."
-	@go clean -testcache
+	@go clean -cache -testcache -modcache
 	@rm -rf $(COVERAGE_PATH)
 	@mkdir -p $(COVERAGE_PATH)
 	@go test -v -coverpkg=./... ./... -coverprofile $(COVERAGE_PATH)coverage.txt
-	@go tool cover -func=$(COVERAGE_PATH)coverage.txt -o $(COVERAGE_PATH)functions.txt
-	@go tool cover -html=$(COVERAGE_PATH)coverage.txt -o $(COVERAGE_PATH)coverage.html
+	@echo "Filtering coverage profile to existing files..."
+	@awk 'NR==1 { print; next } { split($$0, a, ":"); cmd = "test -f \"" a[1] "\""; if (system(cmd) == 0) print }' \
+		$(COVERAGE_PATH)coverage.txt > $(COVERAGE_PATH)coverage.filtered.txt
+	@go tool cover -func=$(COVERAGE_PATH)coverage.filtered.txt -o $(COVERAGE_PATH)functions.txt
+	@go tool cover -html=$(COVERAGE_PATH)coverage.filtered.txt -o $(COVERAGE_PATH)coverage.html
 
 test-race:
 	@go test ./... -race -count=1 -timeout=600s
