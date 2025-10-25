@@ -9,7 +9,8 @@ include $(CURDIR)/tools/tools.mk
 BENCHSTAT := $(CURDIR)/tools/bin/benchstat
 
 clean:
-	@rm -rf $(BUILD_PATH)
+	@go clean -testcache
+	@rm -rf $(COVERAGE_PATH)
 
 dir-coverage:
 	@mkdir -p $(COVERAGE_PATH)

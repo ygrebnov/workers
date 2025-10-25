@@ -79,28 +79,6 @@ func validateConfig(_ *config) error {
 // Breaking change: Option now returns an error on invalid input instead of panicking.
 type Option func(*config) error
 
-// // Internal builder state for options assembly.
-// type configOptions struct {
-// 	cfg          config
-// 	poolSelected poolType
-// }
-//
-// type poolType int
-//
-// const (
-// 	poolUnspecified poolType = iota
-// 	poolDynamic
-// 	poolFixed
-// )
-//
-// var errFixedDynamicPoolOptionsConflict = errorc.With(
-// 	ErrInvalidOption,
-// 	errorc.String(
-// 		"",
-// 		"conflicting pool options: WithFixedPool and WithDynamicPool both specified",
-// 	),
-// )
-
 // WithFixedPool selects a fixed-size worker pool with the given capacity (must be > 0).
 func WithFixedPool(n uint) Option {
 	return func(cfg *config) error {
