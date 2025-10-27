@@ -307,9 +307,11 @@ func (w *Workers[R]) drainInternalErrors() {
 // - After Start():
 //   - If the internal context is already canceled (Close or StopOnError), it fails fast with ErrInvalidState.
 //   - Otherwise, it enqueues the task and may block while the tasks channel is saturated; cancellation unblocks it and returns ErrInvalidState.
+//   - IMPORTANT: AddTask may block for an unbounded time if producers outpace consumers and the queue remains full.
+//     Use AddTaskContext to bound enqueue time or implement non-blocking admission.
 //
 // - Before Start():
-//   - If TasksBufferSize > 0, it enqueues into the buffer and may block when the buffer is full.
+//   - If TasksBufferSize > 0, it enqueues into the buffer and may block when the buffer is full (until Start drains).
 //   - If TasksBufferSize == 0, it returns ErrInvalidState (there is nowhere to put the task yet).
 //
 // - It never panics due to queue saturation.
@@ -348,6 +350,57 @@ func (w *Workers[R]) AddTask(t Task[R]) error {
 	// Fall back to a normal send; this may block if the buffer is full.
 	w.tasks <- t
 	return nil
+}
+
+// AddTaskContext enqueues a task for execution using the provided context to bound enqueue time.
+//
+// Semantics:
+// - Safe for concurrent use by multiple goroutines.
+// - If the controller is canceled/closed (Close or StopOnError), returns ErrInvalidState promptly.
+// - Otherwise attempts to enqueue; if this would block (queue full or pre-Start buffered), it waits until either:
+//   - space becomes available and the task is enqueued; or
+//   - the provided ctx is done, in which case it returns ctx.Err().
+//
+// - Before Start():
+//   - If TasksBufferSize == 0 (no queue), returns ErrInvalidState.
+//   - If TasksBufferSize > 0, may block until Start begins draining or until ctx is done.
+func (w *Workers[R]) AddTaskContext(ctx context.Context, t Task[R]) error {
+	// No tasks channel available (e.g., zero buffer before Start).
+	if w.tasks == nil {
+		return ErrInvalidState
+	}
+
+	// Assign input index when either error tagging or preserve-order are enabled.
+	if w.config != nil && (w.config.ErrorTagging || w.config.PreserveOrder) {
+		idx := int(atomic.AddUint64(&w.seq, 1) - 1)
+		t = t.WithIndex(idx)
+		if w.config.ErrorTagging {
+			t = wrapTaskWithTagging(t, idx)
+		}
+	}
+
+	// Started path: remain aware of both internal cancellation and caller ctx while sending.
+	if w.ctx != nil {
+		if w.ctx.Err() != nil {
+			return ErrInvalidState
+		}
+		select {
+		case w.tasks <- t:
+			return nil
+		case <-w.ctx.Done():
+			return ErrInvalidState
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	// Not started yet: allow caller ctx to bound the send on the buffered queue.
+	select {
+	case w.tasks <- t:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // GetResults returns a channel to receive tasks execution results.
