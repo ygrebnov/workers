@@ -1,3 +1,4 @@
+//nolint:dupl // acceptable for now
 package metrics
 
 import (
@@ -41,6 +42,7 @@ func applyOptions(opts []InstrumentOption) InstrumentConfig {
 
 // Counter returns a monotonic counter instrument for the given name (created once).
 func (p *BasicProvider) Counter(name string, opts ...InstrumentOption) Counter {
+	// TODO: use a helper method to avoid duplication with UpDownCounter
 	p.mu.RLock()
 	c, ok := p.counters[name]
 	if ok {
@@ -171,12 +173,12 @@ func (h *BasicHistogram) Snapshot() HistSnapshot {
 	h.mu.Lock()
 	count := h.count
 	sum := h.sum
-	min := h.min
-	max := h.max
+	minV := h.min
+	maxV := h.max
 	h.mu.Unlock()
 	mean := 0.0
 	if count > 0 {
 		mean = sum / float64(count)
 	}
-	return HistSnapshot{Count: count, Sum: sum, Min: min, Max: max, Mean: mean}
+	return HistSnapshot{Count: count, Sum: sum, Min: minV, Max: maxV, Mean: mean}
 }
