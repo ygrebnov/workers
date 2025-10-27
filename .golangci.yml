@@ -59,7 +59,7 @@ linters-settings:
     threshold: 100
   funlen:
     ignore-comments: true
-    lines: 80
+    lines: 100
   gci:
     sections:
       - standard
