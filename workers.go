@@ -7,6 +7,7 @@ import (
 
 	"github.com/ygrebnov/errorc"
 
+	"github.com/ygrebnov/workers/metrics"
 	"github.com/ygrebnov/workers/pool"
 )
 
@@ -147,8 +148,31 @@ func (w *Workers[R]) initialize(ctx context.Context, cfg *config) {
 		events = make(chan completionEvent[R], cfg.ResultsBufferSize)
 	}
 
+	// Resolve metrics provider eagerly to avoid races inside worker factory.
+	mp := cfg.MetricsProvider
+	if mp == nil {
+		mp = metrics.NewNoopProvider()
+		// safe here (single-threaded init) to update the config for observability/inspection
+		cfg.MetricsProvider = mp
+	}
+
 	newWorkerFn := func() interface{} {
-		return newWorker(r, workerErrors, cfg.ErrorTagging, cfg.PreserveOrder, events)
+		mCompleted := mp.Counter(
+			"workers_tasks_completed_total",
+			metrics.WithUnit("1"),
+			metrics.WithDescription("Total tasks executed (success+error)"),
+		)
+		mErrors := mp.Counter(
+			"workers_tasks_errors_total",
+			metrics.WithUnit("1"),
+			metrics.WithDescription("Total tasks that ended with error"),
+		)
+		mDuration := mp.Histogram(
+			"workers_task_duration_seconds",
+			metrics.WithUnit("seconds"),
+			metrics.WithDescription("Task execution duration in seconds"),
+		)
+		return newWorker(r, workerErrors, cfg.ErrorTagging, cfg.PreserveOrder, events, mCompleted, mErrors, mDuration)
 	}
 
 	var p pool.Pool
@@ -284,8 +308,39 @@ func (w *Workers[R]) initPoolIfNeeded() {
 	if w.config.StopOnError {
 		workerErrors = w.errorsBuf
 	}
+	// Resolve metrics provider once and capture into the worker factory to avoid concurrent writes.
+	mp := w.config.MetricsProvider
+	if mp == nil {
+		mp = metrics.NewNoopProvider()
+		// single-threaded here; keep config reflectively consistent
+		w.config.MetricsProvider = mp
+	}
 	newWorkerFn := func() interface{} {
-		return newWorker(w.results, workerErrors, w.config.ErrorTagging, w.config.PreserveOrder, w.events)
+		mCompleted := mp.Counter(
+			"workers_tasks_completed_total",
+			metrics.WithUnit("1"),
+			metrics.WithDescription("Total tasks executed (success+error)"),
+		)
+		mErrors := mp.Counter(
+			"workers_tasks_errors_total",
+			metrics.WithUnit("1"),
+			metrics.WithDescription("Total tasks that ended with error"),
+		)
+		mDuration := mp.Histogram(
+			"workers_task_duration_seconds",
+			metrics.WithUnit("seconds"),
+			metrics.WithDescription("Task execution duration in seconds"),
+		)
+		return newWorker(
+			w.results,
+			workerErrors,
+			w.config.ErrorTagging,
+			w.config.PreserveOrder,
+			w.events,
+			mCompleted,
+			mErrors,
+			mDuration,
+		)
 	}
 	if w.config.MaxWorkers > 0 {
 		w.pool = pool.NewFixed(w.config.MaxWorkers, newWorkerFn)
@@ -358,20 +413,24 @@ func (w *Workers[R]) Close() {
 	})
 }
 
-// drainInternalErrors forwards any buffered internal errors to the outward channel best-effort.
-// Non-blocking send; drops if saturated. Safe to call when errorsBuf is nil.
+// drainInternalErrors flushes any errors still buffered in w.errorsBuf to w.errors with best effort.
+// It should be called only in StopOnError mode during Close.
 func (w *Workers[R]) drainInternalErrors() {
-	if w.errorsBuf == nil {
+	if !w.config.StopOnError {
 		return
 	}
 	for {
 		select {
-		case e := <-w.errorsBuf:
+		case err, ok := <-w.errorsBuf:
+			if !ok {
+				return
+			}
+			// best-effort forward without blocking on close
 			select {
-			case w.errors <- e:
+			case w.errors <- err:
 				// forwarded
 			default:
-				// drop
+				// receiver not ready; drop rather than block Close
 			}
 		default:
 			return

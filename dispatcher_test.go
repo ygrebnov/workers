@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ygrebnov/workers/metrics"
 	"github.com/ygrebnov/workers/pool"
 )
 
@@ -20,9 +21,19 @@ func TestDispatcher_HappyPath(t *testing.T) {
 	rCh := make(chan int, 8)
 	eCh := make(chan error, 8)
 	evCh := make(chan completionEvent[int], 8)
+	m := metrics.NewNoopProvider()
 	p := pool.NewDynamic(
 		func() interface{} {
-			return newWorker[int](rCh, eCh, false, false, evCh)
+			return newWorker[int](
+				rCh,
+				eCh,
+				false,
+				false,
+				evCh,
+				m.Counter(""),
+				m.Counter(""),
+				m.Histogram(""),
+			)
 		})
 	d := newDispatcher[int](tasks, &inflight, p)
 
@@ -86,9 +97,19 @@ func TestDispatcher_CancelStopsReceiving(t *testing.T) {
 	rCh := make(chan int, 8)
 	eCh := make(chan error, 8)
 	evCh := make(chan completionEvent[int], 8)
+	m := metrics.NewNoopProvider()
 	p := pool.NewDynamic(
 		func() interface{} {
-			return newWorker[int](rCh, eCh, false, false, evCh)
+			return newWorker[int](
+				rCh,
+				eCh,
+				false,
+				false,
+				evCh,
+				m.Counter(""),
+				m.Counter(""),
+				m.Histogram(""),
+			)
 		})
 	var inflight sync.WaitGroup
 	d := newDispatcher[int](tasks, &inflight, p)

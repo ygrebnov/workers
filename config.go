@@ -2,6 +2,8 @@ package workers
 
 import (
 	"github.com/ygrebnov/errorc"
+
+	"github.com/ygrebnov/workers/metrics"
 )
 
 // config holds Workers configuration.
@@ -53,6 +55,9 @@ type config struct {
 	// When non-nil, Workers will read tasks exclusively from this channel (configured via WithIntakeChannel).
 	// In this mode, AddTask/AddTaskContext/TryAddTask are rejected with ErrInvalidState.
 	Intake any
+
+	// MetricsProvider supplies instruments for emitting internal metrics. When nil, a no-op provider is used.
+	MetricsProvider metrics.Provider
 }
 
 // defaultConfig centralizes default values for config.
@@ -69,6 +74,7 @@ func defaultConfig() config {
 		ErrorTagging:                false,
 		PreserveOrder:               false,
 		Intake:                      nil,
+		MetricsProvider:             nil,
 	}
 }
 
@@ -142,4 +148,17 @@ func WithPreserveOrder() Option {
 // or when the channel is closed. In this mode, AddTask/AddTaskContext/TryAddTask are rejected.
 func WithIntakeChannel[R any](in <-chan Task[R]) Option {
 	return func(cfg *config) error { cfg.Intake = in; return nil }
+}
+
+// WithMetrics configures a metrics provider used by Workers to emit internal metrics.
+// If provider is nil, a no-op implementation is used.
+func WithMetrics(provider metrics.Provider) Option {
+	return func(cfg *config) error {
+		if provider == nil {
+			cfg.MetricsProvider = metrics.NewNoopProvider()
+			return nil
+		}
+		cfg.MetricsProvider = provider
+		return nil
+	}
 }

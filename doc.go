@@ -77,6 +77,15 @@
 //   - StopOnError: on first error, cancellation stops forwarding from intake promptly; producers may block
 //     on sends depending on the channel's capacity.
 //
+// Metrics
+//   - Configure with WithMetrics(provider). If omitted or nil, a no-op provider is used (zero overhead).
+//   - The core emits a minimal v1 set of instruments:
+//   - Counter workers_tasks_completed_total (unit: 1): total tasks executed (success + error)
+//   - Counter workers_tasks_errors_total (unit: 1): total tasks that ended with error
+//   - Histogram workers_task_duration_seconds (unit: seconds): task execution duration in seconds
+//   - Providers are pluggable (see the metrics package). You can use the built-in BasicProvider for tests/examples,
+//     or supply an adapter (e.g., OpenTelemetry) from an external module.
+//
 // Pools
 //   - Dynamic pool (default): grows and shrinks as needed via sync.Pool.
 //   - Fixed pool: caps the number of concurrently executing workers.

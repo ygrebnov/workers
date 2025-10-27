@@ -2,6 +2,9 @@ package workers
 
 import (
 	"context"
+	"time"
+
+	"github.com/ygrebnov/workers/metrics"
 )
 
 type worker[R any] struct {
@@ -10,16 +13,29 @@ type worker[R any] struct {
 	tagEnabled bool
 	preserve   bool
 	events     chan completionEvent[R]
+
+	// metrics instruments (may be no-op)
+	mCompleted metrics.Counter
+	mErrors    metrics.Counter
+	mDuration  metrics.Histogram
 }
 
 func newWorker[R any](
 	results chan R, errors chan error, tagEnabled, preserve bool, events chan completionEvent[R],
+	mCompleted metrics.Counter, mErrors metrics.Counter, mDuration metrics.Histogram,
 ) *worker[R] {
-	return &worker[R]{results: results, errors: errors, tagEnabled: tagEnabled, preserve: preserve, events: events}
+	return &worker[R]{
+		results: results, errors: errors, tagEnabled: tagEnabled, preserve: preserve, events: events,
+		mCompleted: mCompleted, mErrors: mErrors, mDuration: mDuration,
+	}
 }
 
 func (w *worker[R]) execute(ctx context.Context, t Task[R]) {
+	start := time.Now()
 	result, err := t.Run(ctx)
+	elapsed := time.Since(start).Seconds()
+	w.mDuration.Record(elapsed)
+	w.mCompleted.Add(1)
 
 	if err != nil {
 		// Safety-net: ensure error is tagged if not already, only when tagging enabled.
@@ -31,6 +47,7 @@ func (w *worker[R]) execute(ctx context.Context, t Task[R]) {
 				}
 			}
 		}
+		w.mErrors.Add(1)
 		// In preserve-order mode, still emit a completion event (present=false) so reordering can advance.
 		if w.preserve && w.events != nil {
 			idx, _ := t.Index()
