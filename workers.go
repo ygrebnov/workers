@@ -370,13 +370,16 @@ func (w *Workers[R]) AddTaskContext(ctx context.Context, t Task[R]) error {
 		return ErrInvalidState
 	}
 
-	// Assign input index when either error tagging or preserve-order are enabled.
-	if w.config != nil && (w.config.ErrorTagging || w.config.PreserveOrder) {
-		idx := int(atomic.AddUint64(&w.seq, 1) - 1)
-		t = t.WithIndex(idx)
-		if w.config.ErrorTagging {
-			t = wrapTaskWithTagging(t, idx)
+	prepare := func() Task[R] {
+		if w.config != nil && (w.config.ErrorTagging || w.config.PreserveOrder) {
+			idx := int(atomic.AddUint64(&w.seq, 1) - 1)
+			nt := t.WithIndex(idx)
+			if w.config.ErrorTagging {
+				nt = wrapTaskWithTagging(nt, idx)
+			}
+			return nt
 		}
+		return t
 	}
 
 	// Started path: remain aware of both internal cancellation and caller ctx while sending.
@@ -385,7 +388,7 @@ func (w *Workers[R]) AddTaskContext(ctx context.Context, t Task[R]) error {
 			return ErrInvalidState
 		}
 		select {
-		case w.tasks <- t:
+		case w.tasks <- prepare():
 			return nil
 		case <-w.ctx.Done():
 			return ErrInvalidState
@@ -396,10 +399,59 @@ func (w *Workers[R]) AddTaskContext(ctx context.Context, t Task[R]) error {
 
 	// Not started yet: allow caller ctx to bound the send on the buffered queue.
 	select {
-	case w.tasks <- t:
+	case w.tasks <- prepare():
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+// TryAddTask attempts to enqueue a task without blocking.
+//
+// Returns:
+// - (true, nil) if the task was enqueued.
+// - (false, nil) if it would block (queue full or not yet started with a full buffer).
+// - (false, ErrInvalidState) if the controller is canceled/closed or there is no tasks queue (zero buffer before Start).
+//
+// Notes:
+// - Indexing/error-tagging metadata is applied only when the task is accepted.
+func (w *Workers[R]) TryAddTask(t Task[R]) (bool, error) {
+	// No tasks channel available (e.g., zero buffer configured and not started): invalid state.
+	if w.tasks == nil {
+		return false, ErrInvalidState
+	}
+
+	prepare := func() Task[R] {
+		if w.config != nil && (w.config.ErrorTagging || w.config.PreserveOrder) {
+			idx := int(atomic.AddUint64(&w.seq, 1) - 1)
+			nt := t.WithIndex(idx)
+			if w.config.ErrorTagging {
+				nt = wrapTaskWithTagging(nt, idx)
+			}
+			return nt
+		}
+		return t
+	}
+
+	// If started, respect internal cancellation as a hard invalid state.
+	if w.ctx != nil {
+		if w.ctx.Err() != nil {
+			return false, ErrInvalidState
+		}
+		select {
+		case w.tasks <- prepare():
+			return true, nil
+		default:
+			return false, nil
+		}
+	}
+
+	// Not started yet: non-blocking attempt against the buffered queue.
+	select {
+	case w.tasks <- prepare():
+		return true, nil
+	default:
+		return false, nil
 	}
 }
 

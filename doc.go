@@ -44,16 +44,23 @@
 //     Close() forwards any remaining buffered internal errors best-effort before closing the outward
 //     Errors channel; saturated outward buffers may still drop some errors.
 //
-// AddTask semantics
-//   - Concurrency: AddTask is safe for concurrent use by multiple goroutines.
-//   - After Start():
-//   - If the internal context is canceled (Close or StopOnError), AddTask fails fast with ErrInvalidState.
-//   - Otherwise, AddTask enqueues and may block while the tasks channel is saturated; context cancellation
-//     unblocks the call and returns ErrInvalidState.
-//   - Before Start():
-//   - If TasksBufferSize > 0, AddTask enqueues into the buffer and may block when the buffer is full.
-//   - If TasksBufferSize == 0, AddTask returns ErrInvalidState (no queue exists yet).
-//   - No panics on normal flow: AddTask never panics due to queue saturation.
+// AddTask and enqueue variants
+//   - AddTask(t) error:
+//   - Safe for concurrent use.
+//   - After Start: enqueues or blocks while the queue is full; if the controller is canceled
+//     (StopOnError/Close), it fails fast with ErrInvalidState. IMPORTANT: this call may block
+//     indefinitely if producers outpace consumers. Use AddTaskContext or TryAddTask to avoid long blocks.
+//   - Before Start: with TasksBufferSize > 0, enqueues (may block when full until Start drains);
+//     with TasksBufferSize == 0, returns ErrInvalidState.
+//   - AddTaskContext(ctx, t) error:
+//   - Same semantics as AddTask, but honors the caller's context to bound enqueue time. If ctx
+//     is done while the queue is full, returns ctx.Err(). Still returns ErrInvalidState when the
+//     controller is canceled/closed, or when no queue exists before Start.
+//   - Indexing/ErrorTagging is applied only when the task is accepted.
+//   - TryAddTask(t) (bool, error):
+//   - Non-blocking. Returns (true, nil) if accepted; (false, nil) if it would block; and
+//     (false, ErrInvalidState) if canceled/closed or before Start with zero buffer. Indexing
+//     and ErrorTagging are applied only when the task is accepted.
 //
 // Pools
 //   - Dynamic pool (default): grows and shrinks as needed via sync.Pool.
