@@ -44,6 +44,17 @@
 //     Close() forwards any remaining buffered internal errors best-effort before closing the outward
 //     Errors channel; saturated outward buffers may still drop some errors.
 //
+// AddTask semantics
+//   - Concurrency: AddTask is safe for concurrent use by multiple goroutines.
+//   - After Start():
+//   - If the internal context is canceled (Close or StopOnError), AddTask fails fast with ErrInvalidState.
+//   - Otherwise, AddTask enqueues and may block while the tasks channel is saturated; context cancellation
+//     unblocks the call and returns ErrInvalidState.
+//   - Before Start():
+//   - If TasksBufferSize > 0, AddTask enqueues into the buffer and may block when the buffer is full.
+//   - If TasksBufferSize == 0, AddTask returns ErrInvalidState (no queue exists yet).
+//   - No panics on normal flow: AddTask never panics due to queue saturation.
+//
 // Pools
 //   - Dynamic pool (default): grows and shrinks as needed via sync.Pool.
 //   - Fixed pool: caps the number of concurrently executing workers.

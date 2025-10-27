@@ -34,7 +34,7 @@ type Workers[R interface{}] struct {
 	errors  chan error // outward errors channel
 
 	// When StopOnError is enabled, workers produce into this smaller internal buffer,
-	// which Start() drains and forwards into the outward errors channel, then cancels.
+	// which Start() drains and forwards into the outward errors channel.
 	errorsBuf chan error
 
 	// in-flight tasks accounting (dispatch wrappers increment/decrement)
@@ -300,13 +300,23 @@ func (w *Workers[R]) drainInternalErrors() {
 	}
 }
 
-// AddTask adds a task to the Workers queue.
+// AddTask enqueues a task for execution.
+//
+// Concurrency and blocking semantics:
+// - Safe for concurrent use by multiple goroutines.
+// - After Start():
+//   - If the internal context is already canceled (Close or StopOnError), it fails fast with ErrInvalidState.
+//   - Otherwise, it enqueues the task and may block while the tasks channel is saturated; cancellation unblocks it and returns ErrInvalidState.
+//
+// - Before Start():
+//   - If TasksBufferSize > 0, it enqueues into the buffer and may block when the buffer is full.
+//   - If TasksBufferSize == 0, it returns ErrInvalidState (there is nowhere to put the task yet).
+//
+// - It never panics due to queue saturation.
 func (w *Workers[R]) AddTask(t Task[R]) error {
 	switch {
 	case w.tasks == nil:
 		return ErrInvalidState
-	case cap(w.tasks) > 0 && len(w.tasks) == cap(w.tasks):
-		panic("tasks channel is full")
 	}
 
 	// Assign input index when either error tagging or preserve-order are enabled.
@@ -335,7 +345,7 @@ func (w *Workers[R]) AddTask(t Task[R]) error {
 	}
 
 	// Not started yet (ctx is nil) but tasks channel exists (e.g., constructed with non-zero buffer).
-	// Fall back to a normal send.
+	// Fall back to a normal send; this may block if the buffer is full.
 	w.tasks <- t
 	return nil
 }

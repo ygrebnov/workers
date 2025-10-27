@@ -176,6 +176,17 @@ These top-level helpers make common usage patterns concise while preserving the 
 - **Backpressure:** Stream helpers propagate backpressure via configured buffers and by requiring consumers to drain the returned channels.
 - **Cancellation:** With `StopOnError`, the internal controller context is canceled on the first error. Stream forwarders stop reading from the input channel and wait for already-started tasks to finish before closing the output channels.
 
+## AddTask semantics (no-panic backpressure)
+
+- Concurrency: AddTask is safe for concurrent use by multiple goroutines.
+- After Start():
+    - If the internal context is canceled (Close or StopOnError), AddTask fails fast with ErrInvalidState.
+    - Otherwise, AddTask enqueues the task and may block while the tasks channel is full; if cancellation happens while blocked, the call unblocks and returns ErrInvalidState.
+- Before Start():
+    - If TasksBufferSize > 0, AddTask enqueues into the buffer and may block when the buffer is full.
+    - If TasksBufferSize == 0, AddTask returns ErrInvalidState because there is nowhere to put the task yet.
+- No panics: AddTask never panics due to queue saturation.
+
 ## Channels and `Close`
 - The library owns the `Results` and `Errors` channels. When you call `Close()`, it:
     1. Cancels the internal context to stop dispatching new work.

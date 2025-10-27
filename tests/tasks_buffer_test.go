@@ -50,20 +50,21 @@ func TestTasksBuffer(t *testing.T) {
 			delayedStart:         true,
 		},
 
+		// No panic when tasks channel is full before Start.
+		// We enqueue up to buffer capacity (4) before Start, then Start will drain.
 		{
-			name: "taskString_dynamic_delayedStart_tasksChannelFull",
+			name: "taskString_dynamic_delayedStart_buffered_OptionA",
 			options: []workers.Option{
 				workers.WithFixedPool(uint(runtime.NumCPU())),
 				workers.WithTasksBuffer(4),
 			},
-			nTasks: 5,
+			nTasks: 4,
 			task: func(i int) workers.Task[string] {
 				return workers.TaskValue[string](newTaskString(i, false, false, false))
 			},
-			expectedAddTaskError: &errAddTask{i: 5, shouldPanic: true},
-			expectedResults:      getExpectedResults(1, 2, 3, 4),
-			expectedErrors:       []string{},
-			delayedStart:         true,
+			expectedResults: getExpectedResults(1, 2, 3, 4),
+			expectedErrors:  []string{},
+			delayedStart:    true,
 		},
 	}
 
