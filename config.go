@@ -48,6 +48,11 @@ type config struct {
 	// due to head-of-line blocking and increases memory for buffering.
 	// Default: false (disabled).
 	PreserveOrder bool
+
+	// Intake holds an optional user-supplied intake channel (stored as any due to non-generic config).
+	// When non-nil, Workers will read tasks exclusively from this channel (configured via WithIntakeChannel).
+	// In this mode, AddTask/AddTaskContext/TryAddTask are rejected with ErrInvalidState.
+	Intake any
 }
 
 // defaultConfig centralizes default values for config.
@@ -63,6 +68,7 @@ func defaultConfig() config {
 		StopOnErrorErrorsBufferSize: 100,
 		ErrorTagging:                false,
 		PreserveOrder:               false,
+		Intake:                      nil,
 	}
 }
 
@@ -129,4 +135,11 @@ func WithErrorTagging() Option {
 // When enabled, Workers reorder completed tasks and only deliver results in index order.
 func WithPreserveOrder() Option {
 	return func(cfg *config) error { cfg.PreserveOrder = true; return nil }
+}
+
+// WithIntakeChannel configures Workers to read tasks exclusively from the provided channel.
+// The caller owns the channel's lifecycle and buffering; Workers will stop reading on cancellation
+// or when the channel is closed. In this mode, AddTask/AddTaskContext/TryAddTask are rejected.
+func WithIntakeChannel[R any](in <-chan Task[R]) Option {
+	return func(cfg *config) error { cfg.Intake = in; return nil }
 }

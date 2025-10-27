@@ -44,6 +44,39 @@
 //     Close() forwards any remaining buffered internal errors best-effort before closing the outward
 //     Errors channel; saturated outward buffers may still drop some errors.
 //
+// AddTask and enqueue variants
+//   - AddTask(t) error:
+//   - Safe for concurrent use.
+//   - After Start: enqueues or blocks while the queue is full; if the controller is canceled
+//     (StopOnError/Close), it fails fast with ErrInvalidState. IMPORTANT: this call may block
+//     indefinitely if producers outpace consumers. Use AddTaskContext or TryAddTask to avoid long blocks.
+//   - Before Start: with TasksBufferSize > 0, enqueues (may block when full until Start drains);
+//     with TasksBufferSize == 0, returns ErrInvalidState.
+//   - AddTaskContext(ctx, t) error:
+//   - Same semantics as AddTask, but honors the caller's context to bound enqueue time. If ctx
+//     is done while the queue is full, returns ctx.Err(). Still returns ErrInvalidState when the
+//     controller is canceled/closed, or when no queue exists before Start.
+//   - Indexing/ErrorTagging is applied only when the task is accepted.
+//   - TryAddTask(t) (bool, error):
+//   - Non-blocking. Returns (true, nil) if accepted; (false, nil) if it would block; and
+//     (false, ErrInvalidState) if canceled/closed or before Start with zero buffer. Indexing
+//     and ErrorTagging are applied only when the task is accepted.
+//
+// External intake channel (exclusive mode)
+//   - Enable with WithIntakeChannel(in <-chan Task[R]).
+//   - In this mode, tasks arrive exclusively via the user-provided channel and are forwarded
+//     to the internal queue by an intake-forwarder goroutine. Direct AddTask/AddTaskContext/
+//     TryAddTask calls are rejected with ErrInvalidState.
+//   - Ownership: the caller owns the intake channel; send tasks and close when done.
+//     Workers will stop reading on cancellation and when the channel is closed.
+//   - Before Start: you may send into the intake channel; values buffer per your channel's
+//     capacity and are forwarded to the internal queue once Start() runs.
+//   - Interactions:
+//   - PreserveOrder: input indices are assigned at intake admission; ordering works across all tasks.
+//   - ErrorTagging: intake admission wraps errors with ID and index metadata when enabled.
+//   - StopOnError: on first error, cancellation stops forwarding from intake promptly; producers may block
+//     on sends depending on the channel's capacity.
+//
 // Pools
 //   - Dynamic pool (default): grows and shrinks as needed via sync.Pool.
 //   - Fixed pool: caps the number of concurrently executing workers.

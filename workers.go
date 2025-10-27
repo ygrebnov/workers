@@ -5,6 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ygrebnov/errorc"
+
 	"github.com/ygrebnov/workers/pool"
 )
 
@@ -25,6 +27,9 @@ type Workers[R interface{}] struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	// started indicates whether Start has fully initialized context and goroutines.
+	started uint32 // 0 = not started, 1 = started (atomic)
+
 	// worker pool
 	pool pool.Pool
 
@@ -34,8 +39,11 @@ type Workers[R interface{}] struct {
 	errors  chan error // outward errors channel
 
 	// When StopOnError is enabled, workers produce into this smaller internal buffer,
-	// which Start() drains and forwards into the outward errors channel, then cancels.
+	// which Start() drains and forwards into the outward errors channel.
 	errorsBuf chan error
+
+	// external intake channel when configured via WithIntakeChannel
+	intake <-chan Task[R]
 
 	// in-flight tasks accounting (dispatch wrappers increment/decrement)
 	inflight sync.WaitGroup
@@ -84,9 +92,33 @@ func New[R interface{}](ctx context.Context, opts ...Option) (*Workers[R], error
 		return nil, err
 	}
 
-	w := &Workers[R]{}
+	// Validate optional intake channel type now that R is known.
+	var intakeCh <-chan Task[R]
+	if cfg.Intake != nil {
+		if ch, ok := cfg.Intake.(<-chan Task[R]); ok {
+			intakeCh = ch
+		} else {
+			return nil, errorTypeMismatch()
+		}
+	}
+
+	// Ensure intake is set on the instance before initialize (and potential StartImmediately).
+	w := &Workers[R]{
+		intake: intakeCh,
+	}
 	w.initialize(ctx, &cfg)
 	return w, nil
+}
+
+// errorTypeMismatch wraps ErrInvalidConfig with a precise message for intake channel mismatch.
+func errorTypeMismatch() error {
+	return errorc.With(
+		ErrInvalidConfig,
+		errorc.String(
+			"",
+			"WithIntakeChannel type mismatch: provided channel element type does not match Workers[R] result type",
+		),
+	)
 }
 
 // initialize sets up the Workers controller using the provided configuration.
@@ -146,6 +178,9 @@ func (w *Workers[R]) initialize(ctx context.Context, cfg *config) {
 		w.errors = workerErrors
 	}
 
+	// intake channel is provided by user via WithIntakeChannel (already validated in New).
+	// w.intake is assigned in New and available before Start.
+
 	if cfg.StartImmediately {
 		w.Start(ctx)
 	}
@@ -160,13 +195,57 @@ func (w *Workers[R]) Start(ctx context.Context) {
 		w.initContext(ctx)
 		w.startErrorForwarderIfNeeded()
 		w.startReordererIfNeeded()
+
+		// start dispatcher
 		d := newDispatcher[R](w.tasks, &w.inflight, w.pool)
 		w.dispatcherWG.Add(1)
 		go func() {
 			defer w.dispatcherWG.Done()
 			d.run(w.ctx)
 		}()
+
+		// start intake forwarder if intake channel is configured
+		if w.intake != nil {
+			w.dispatcherWG.Add(1)
+			go func() {
+				defer w.dispatcherWG.Done()
+				w.runIntakeForwarder()
+			}()
+		}
+
+		// mark started after all components are initialized and goroutines launched
+		atomic.StoreUint32(&w.started, 1)
 	})
+}
+
+// runIntakeForwarder multiplexes tasks from the external intake channel into the internal tasks queue.
+// It assigns indices and wraps errors (when enabled) at admission time. Cancellation-aware to avoid blocking.
+func (w *Workers[R]) runIntakeForwarder() {
+	for {
+		select {
+		case <-w.ctx.Done():
+			return
+		case t, ok := <-w.intake:
+			if !ok {
+				return
+			}
+			// assign index/tagging at intake time (exclusive source of tasks)
+			if w.config != nil && (w.config.ErrorTagging || w.config.PreserveOrder) {
+				idx := int(atomic.AddUint64(&w.seq, 1) - 1)
+				t = t.WithIndex(idx)
+				if w.config.ErrorTagging {
+					t = wrapTaskWithTagging(t, idx)
+				}
+			}
+			// forward to internal tasks, but do not block if canceled
+			select {
+			case w.tasks <- t:
+				// forwarded
+			case <-w.ctx.Done():
+				return
+			}
+		}
+	}
 }
 
 // initDefaultsIfNeeded ensures config exists.
@@ -300,13 +379,29 @@ func (w *Workers[R]) drainInternalErrors() {
 	}
 }
 
-// AddTask adds a task to the Workers queue.
+// AddTask enqueues a task for execution.
+//
+// Concurrency and blocking semantics:
+// - Safe for concurrent use by multiple goroutines.
+// - After Start():
+//   - If the internal context is already canceled (Close or StopOnError), it fails fast with ErrInvalidState.
+//   - Otherwise, it enqueues the task and may block while the tasks channel is saturated;
+//     cancellation unblocks it and returns ErrInvalidState.
+//   - IMPORTANT: AddTask may block for an unbounded time if producers outpace consumers and the queue remains full.
+//     Use AddTaskContext to bound enqueue time or implement non-blocking admission.
+//
+// - Before Start():
+//   - If TasksBufferSize > 0, it enqueues into the buffer and may block when the buffer is full (until Start drains).
+//   - If TasksBufferSize == 0, it returns ErrInvalidState (there is nowhere to put the task yet).
+//
+// - It never panics due to queue saturation.
 func (w *Workers[R]) AddTask(t Task[R]) error {
 	switch {
 	case w.tasks == nil:
 		return ErrInvalidState
-	case cap(w.tasks) > 0 && len(w.tasks) == cap(w.tasks):
-		panic("tasks channel is full")
+	// reject direct adds when external intake channel is configured
+	case w.intake != nil:
+		return ErrExclusiveIntakeChannel
 	}
 
 	// Assign input index when either error tagging or preserve-order are enabled.
@@ -320,7 +415,7 @@ func (w *Workers[R]) AddTask(t Task[R]) error {
 	}
 
 	// If we've been started and the internal context is canceled, don't block; return ErrInvalidState.
-	if w.ctx != nil {
+	if atomic.LoadUint32(&w.started) == 1 {
 		// If already canceled, fail fast deterministically.
 		if w.ctx.Err() != nil {
 			return ErrInvalidState
@@ -335,9 +430,121 @@ func (w *Workers[R]) AddTask(t Task[R]) error {
 	}
 
 	// Not started yet (ctx is nil) but tasks channel exists (e.g., constructed with non-zero buffer).
-	// Fall back to a normal send.
+	// Fall back to a normal send; this may block if the buffer is full.
 	w.tasks <- t
 	return nil
+}
+
+// AddTaskContext enqueues a task for execution using the provided context to bound enqueue time.
+//
+// Semantics:
+// - Safe for concurrent use by multiple goroutines.
+// - If the controller is canceled/closed (Close or StopOnError), returns ErrInvalidState promptly.
+// - Otherwise attempts to enqueue; if this would block (queue full or pre-Start buffered), it waits until either:
+//   - space becomes available and the task is enqueued; or
+//   - the provided ctx is done, in which case it returns ctx.Err().
+//
+// - Before Start():
+//   - If TasksBufferSize == 0 (no queue), returns ErrInvalidState.
+//   - If TasksBufferSize > 0, may block until Start begins draining or until ctx is done.
+func (w *Workers[R]) AddTaskContext(ctx context.Context, t Task[R]) error {
+	// No tasks channel available (e.g., zero buffer before Start).
+	if w.tasks == nil {
+		return ErrInvalidState
+	}
+	// reject direct adds when external intake channel is configured
+	if w.intake != nil {
+		return ErrExclusiveIntakeChannel
+	}
+
+	prepare := func() Task[R] {
+		if w.config != nil && (w.config.ErrorTagging || w.config.PreserveOrder) {
+			idx := int(atomic.AddUint64(&w.seq, 1) - 1)
+			nt := t.WithIndex(idx)
+			if w.config.ErrorTagging {
+				nt = wrapTaskWithTagging(nt, idx)
+			}
+			return nt
+		}
+		return t
+	}
+
+	// Started path: remain aware of both internal cancellation and caller ctx while sending.
+	if atomic.LoadUint32(&w.started) == 1 {
+		if w.ctx.Err() != nil {
+			return ErrInvalidState
+		}
+		select {
+		case w.tasks <- prepare():
+			return nil
+		case <-w.ctx.Done():
+			return ErrInvalidState
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	// Not started yet: allow caller ctx to bound the send on the buffered queue.
+	select {
+	case w.tasks <- prepare():
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// TryAddTask attempts to enqueue a task without blocking.
+//
+// Returns:
+//   - (true, nil) if the task was enqueued.
+//   - (false, nil) if it would block (queue full or not yet started with a full buffer).
+//   - (false, ErrInvalidState) if the controller is canceled/closed or there is no tasks queue
+//     (zero buffer before Start).
+//
+// Notes:
+// - Indexing/error-tagging metadata is applied only when the task is accepted.
+func (w *Workers[R]) TryAddTask(t Task[R]) (bool, error) {
+	// No tasks channel available (e.g., zero buffer configured and not started): invalid state.
+	if w.tasks == nil {
+		return false, ErrInvalidState
+	}
+	// reject direct adds when external intake channel is configured
+	if w.intake != nil {
+		return false, ErrExclusiveIntakeChannel
+	}
+
+	prepare := func() Task[R] {
+		if w.config != nil && (w.config.ErrorTagging || w.config.PreserveOrder) {
+			idx := int(atomic.AddUint64(&w.seq, 1) - 1)
+			nt := t.WithIndex(idx)
+			if w.config.ErrorTagging {
+				nt = wrapTaskWithTagging(nt, idx)
+			}
+			return nt
+		}
+		return t
+	}
+
+	// If started, respect internal cancellation as a hard invalid state.
+	if atomic.LoadUint32(&w.started) == 1 {
+		if w.ctx.Err() != nil {
+			return false, ErrInvalidState
+		}
+		select {
+		case w.tasks <- prepare():
+			return true, nil
+		default:
+			return false, nil
+		}
+	}
+
+	// Not started yet: non-blocking attempt against the buffered queue.
+	select {
+	case w.tasks <- prepare():
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 // GetResults returns a channel to receive tasks execution results.

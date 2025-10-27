@@ -176,6 +176,17 @@ These top-level helpers make common usage patterns concise while preserving the 
 - **Backpressure:** Stream helpers propagate backpressure via configured buffers and by requiring consumers to drain the returned channels.
 - **Cancellation:** With `StopOnError`, the internal controller context is canceled on the first error. Stream forwarders stop reading from the input channel and wait for already-started tasks to finish before closing the output channels.
 
+## AddTask semantics (no-panic backpressure)
+
+- Concurrency: AddTask is safe for concurrent use by multiple goroutines.
+- After Start():
+    - If the internal context is canceled (Close or StopOnError), AddTask fails fast with ErrInvalidState.
+    - Otherwise, AddTask enqueues the task and may block while the tasks channel is full; if cancellation happens while blocked, the call unblocks and returns ErrInvalidState.
+- Before Start():
+    - If TasksBufferSize > 0, AddTask enqueues into the buffer and may block when the buffer is full.
+    - If TasksBufferSize == 0, AddTask returns ErrInvalidState because there is nowhere to put the task yet.
+- No panics: AddTask never panics due to queue saturation.
+
 ## Channels and `Close`
 - The library owns the `Results` and `Errors` channels. When you call `Close()`, it:
     1. Cancels the internal context to stop dispatching new work.
@@ -378,6 +389,102 @@ func main() {
     }))
 }
 ```
+
+## WithIntakeChannel: user-supplied intake (exclusive mode)
+
+When you already have a pipeline stage that produces `Task[R]` values (or you want full control over buffering/fan-in/closing), you can configure Workers to read tasks exclusively from a channel you own.
+
+- API: `WithIntakeChannel[R any](in <-chan Task[R]) Option`
+- Ownership: you send tasks into `in` and close it when done.
+- Exclusive mode: while an intake channel is configured, `AddTask`/`AddTaskContext`/`TryAddTask` return `ErrExclusiveIntakeChannel`.
+- Pre-start sends: you can send before `Start()`; values will sit in your channel’s buffer and will be drained after `Start()`.
+- Cancellation: after `Close()` or on `WithStopOnError`, Workers stop consuming; senders may block on `in` depending on its capacity—design your pipeline accordingly.
+- Type validation: `New[R]` validates that `in` is a `(<-chan Task[R])`; a mismatch returns `ErrInvalidConfig`.
+
+### When to use
+- You already have task producers and want Workers to simply drain a channel.
+- You need to choose your own buffering/fan-in and close semantics.
+- You want to enqueue before `Start()` without using the internal tasks buffer.
+
+### Example
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"runtime"
+	"time"
+
+	"github.com/ygrebnov/workers"
+)
+
+func main() {
+	ctx := context.Background()
+
+	// 1) Create the intake channel you own. Use any buffer size you need.
+	in := make(chan workers.Task[int], 8)
+
+	// 2) Construct Workers and start immediately.
+	w, err := workers.New[int](
+		ctx,
+		workers.WithIntakeChannel(in),
+		workers.WithFixedPool(uint(runtime.NumCPU())),
+		workers.WithStartImmediately(),
+	)
+	if err != nil {
+		log.Fatalf("setup failed: %v", err)
+	}
+
+	// 3) Produce tasks and close the channel when done.
+	go func() {
+		for i := 0; i < 5; i++ {
+			v := i
+			in <- workers.TaskValue[int](func(context.Context) int {
+				time.Sleep(5 * time.Millisecond)
+				return v * 2
+			})
+		}
+		close(in)
+	}()
+
+	// 4) Consume results and errors until closed (typical pattern).
+	for {
+		select {
+		case r, ok := <-w.GetResults():
+			if !ok {
+				w.Close() // ensure cleanup if you break out here
+				return
+			}
+			log.Printf("result=%d", r)
+		case err, ok := <-w.GetErrors():
+			if !ok {
+				// no more errors
+				continue
+			}
+			log.Printf("error=%v", err)
+		}
+	}
+}
+```
+
+Notes:
+- You can pass a bidirectional channel `chan Task[R]`; it implicitly satisfies `<-chan Task[R]`.
+- Don’t use `AddTask`/`AddTaskContext`/`TryAddTask` while `WithIntakeChannel` is configured—they return `ErrExclusiveIntakeChannel` by design.
+
+### Interactions with options
+- Preserve-order (`WithPreserveOrder`): input indices are assigned when tasks are admitted from `in`; results are emitted in input order.
+- Error tagging (`WithErrorTagging`): any error from a task is wrapped with task ID and input index metadata.
+- Stop-on-error (`WithStopOnError`): the first error cancels the Workers controller; the intake-forwarder stops reading `in`. Your producers may block if they keep sending; choose an appropriate buffer or select on context/timeouts.
+
+### Common pitfalls
+- Forgetting to close `in`: the intake-forwarder exits on `in` close or cancellation; if you never close it and never cancel, the forwarder goroutine will keep waiting for more tasks.
+- Blocking producers on cancel: after cancellation (stop-on-error or `Close()`), Workers stop draining `in`; producers that keep sending on a small/unbuffered channel will block. Prefer buffering and/or select with a done context.
+- Type mismatch: `WithIntakeChannel` must match `R` from `New[R]`. If you pass `chan Task[string]` to `Workers[int]`, `New` will return `ErrInvalidConfig` with a clear message.
+
+### Error semantics recap
+- `ErrExclusiveIntakeChannel`: returned by `AddTask`/`AddTaskContext`/`TryAddTask` when an intake channel is configured.
+- `ErrInvalidConfig`: returned by `New` if the intake channel element type doesn’t match `R`.
 
 ## Contributing
 

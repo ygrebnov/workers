@@ -1,9 +1,8 @@
 name: build
 on:
   push:
-    branches:
-      - main
-  pull_request:
+    tags:
+      - 'v*'        # run on any tag starting with 'v' (e.g., v1, v1.2.3, v2.0.0-rc1)
 
 jobs:
   build:
@@ -23,4 +22,13 @@ jobs:
           version: v1.64.8
           args: --timeout=10m
       - name: test
-        run: make test
+        run: make test-cov
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: .tests/coverage.html
+      - name: Upload results to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
