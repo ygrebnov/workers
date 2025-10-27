@@ -7,26 +7,26 @@ type NoopProvider struct{}
 // NewNoopProvider constructs a Provider that discards all metrics.
 func NewNoopProvider() NoopProvider { return NoopProvider{} }
 
-func (NoopProvider) Counter(name string, opts ...InstrumentOption) Counter {
+func (NoopProvider) Counter(_ string, _ ...InstrumentOption) Counter {
 	return noopCounter{}
 }
 
-func (NoopProvider) UpDownCounter(name string, opts ...InstrumentOption) UpDownCounter {
+func (NoopProvider) UpDownCounter(_ string, _ ...InstrumentOption) UpDownCounter {
 	return noopUpDownCounter{}
 }
 
-func (NoopProvider) Histogram(name string, opts ...InstrumentOption) Histogram {
+func (NoopProvider) Histogram(_ string, _ ...InstrumentOption) Histogram {
 	return noopHistogram{}
 }
 
 type noopCounter struct{}
 
-func (noopCounter) Add(n int64) {}
+func (noopCounter) Add(_ int64) {}
 
 type noopUpDownCounter struct{}
 
-func (noopUpDownCounter) Add(n int64) {}
+func (noopUpDownCounter) Add(_ int64) {}
 
 type noopHistogram struct{}
 
-func (noopHistogram) Record(v float64) {}
+func (noopHistogram) Record(_ float64) {}
