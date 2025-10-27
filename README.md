@@ -390,6 +390,102 @@ func main() {
 }
 ```
 
+## WithIntakeChannel: user-supplied intake (exclusive mode)
+
+When you already have a pipeline stage that produces `Task[R]` values (or you want full control over buffering/fan-in/closing), you can configure Workers to read tasks exclusively from a channel you own.
+
+- API: `WithIntakeChannel[R any](in <-chan Task[R]) Option`
+- Ownership: you send tasks into `in` and close it when done.
+- Exclusive mode: while an intake channel is configured, `AddTask`/`AddTaskContext`/`TryAddTask` return `ErrExclusiveIntakeChannel`.
+- Pre-start sends: you can send before `Start()`; values will sit in your channel’s buffer and will be drained after `Start()`.
+- Cancellation: after `Close()` or on `WithStopOnError`, Workers stop consuming; senders may block on `in` depending on its capacity—design your pipeline accordingly.
+- Type validation: `New[R]` validates that `in` is a `(<-chan Task[R])`; a mismatch returns `ErrInvalidConfig`.
+
+### When to use
+- You already have task producers and want Workers to simply drain a channel.
+- You need to choose your own buffering/fan-in and close semantics.
+- You want to enqueue before `Start()` without using the internal tasks buffer.
+
+### Example
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"runtime"
+	"time"
+
+	"github.com/ygrebnov/workers"
+)
+
+func main() {
+	ctx := context.Background()
+
+	// 1) Create the intake channel you own. Use any buffer size you need.
+	in := make(chan workers.Task[int], 8)
+
+	// 2) Construct Workers and start immediately.
+	w, err := workers.New[int](
+		ctx,
+		workers.WithIntakeChannel(in),
+		workers.WithFixedPool(uint(runtime.NumCPU())),
+		workers.WithStartImmediately(),
+	)
+	if err != nil {
+		log.Fatalf("setup failed: %v", err)
+	}
+
+	// 3) Produce tasks and close the channel when done.
+	go func() {
+		for i := 0; i < 5; i++ {
+			v := i
+			in <- workers.TaskValue[int](func(context.Context) int {
+				time.Sleep(5 * time.Millisecond)
+				return v * 2
+			})
+		}
+		close(in)
+	}()
+
+	// 4) Consume results and errors until closed (typical pattern).
+	for {
+		select {
+		case r, ok := <-w.GetResults():
+			if !ok {
+				w.Close() // ensure cleanup if you break out here
+				return
+			}
+			log.Printf("result=%d", r)
+		case err, ok := <-w.GetErrors():
+			if !ok {
+				// no more errors
+				continue
+			}
+			log.Printf("error=%v", err)
+		}
+	}
+}
+```
+
+Notes:
+- You can pass a bidirectional channel `chan Task[R]`; it implicitly satisfies `<-chan Task[R]`.
+- Don’t use `AddTask`/`AddTaskContext`/`TryAddTask` while `WithIntakeChannel` is configured—they return `ErrExclusiveIntakeChannel` by design.
+
+### Interactions with options
+- Preserve-order (`WithPreserveOrder`): input indices are assigned when tasks are admitted from `in`; results are emitted in input order.
+- Error tagging (`WithErrorTagging`): any error from a task is wrapped with task ID and input index metadata.
+- Stop-on-error (`WithStopOnError`): the first error cancels the Workers controller; the intake-forwarder stops reading `in`. Your producers may block if they keep sending; choose an appropriate buffer or select on context/timeouts.
+
+### Common pitfalls
+- Forgetting to close `in`: the intake-forwarder exits on `in` close or cancellation; if you never close it and never cancel, the forwarder goroutine will keep waiting for more tasks.
+- Blocking producers on cancel: after cancellation (stop-on-error or `Close()`), Workers stop draining `in`; producers that keep sending on a small/unbuffered channel will block. Prefer buffering and/or select with a done context.
+- Type mismatch: `WithIntakeChannel` must match `R` from `New[R]`. If you pass `chan Task[string]` to `Workers[int]`, `New` will return `ErrInvalidConfig` with a clear message.
+
+### Error semantics recap
+- `ErrExclusiveIntakeChannel`: returned by `AddTask`/`AddTaskContext`/`TryAddTask` when an intake channel is configured.
+- `ErrInvalidConfig`: returned by `New` if the intake channel element type doesn’t match `R`.
+
 ## Contributing
 
 Contributions are welcome!  

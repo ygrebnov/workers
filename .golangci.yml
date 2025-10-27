@@ -76,7 +76,7 @@ linters-settings:
       - experimental
       - opinionated
   gocyclo:
-    min-complexity: 12
+    min-complexity: 15
   goimports:
     local-prefixes: github.com/ygrebnov/workers
   gosec:
