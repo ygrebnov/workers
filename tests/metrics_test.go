@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ygrebnov/metrics"
+
 	"github.com/ygrebnov/workers"
-	"github.com/ygrebnov/workers/metrics"
 )
 
 func TestWithMetrics_BasicProvider_CountersAndHistogram(t *testing.T) {

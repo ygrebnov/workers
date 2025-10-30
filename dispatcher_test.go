@@ -7,7 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ygrebnov/workers/metrics"
+	"github.com/ygrebnov/metrics"
+
 	"github.com/ygrebnov/workers/pool"
 )
 

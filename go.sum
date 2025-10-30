@@ -1,2 +1,4 @@
 github.com/ygrebnov/errorc v0.3.0 h1:QtaYoyYGMoPZTsbojjp6ar5hnobt60u0wcxY2DqPG40=
 github.com/ygrebnov/errorc v0.3.0/go.mod h1:jD0xEfIlM+EuFGU3z5DPRBL1l8zm3T+hYBh1L0t1UCg=
+github.com/ygrebnov/metrics v0.1.1 h1:ErJQZiqvoJSx919m93WtgQk/6e6zD5YF88frqgf58nY=
+github.com/ygrebnov/metrics v0.1.1/go.mod h1:XWy8LtXx+Lx56KqTFG8lzSCrgLDfDrItCuGDztfHKE8=

@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 
 	"github.com/ygrebnov/errorc"
+	"github.com/ygrebnov/metrics"
 
-	"github.com/ygrebnov/workers/metrics"
 	"github.com/ygrebnov/workers/pool"
 )
 
