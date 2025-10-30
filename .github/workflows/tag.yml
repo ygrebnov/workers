@@ -24,7 +24,7 @@ jobs:
       - name: test
         run: make test-cov
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage
           path: .tests/coverage.html
