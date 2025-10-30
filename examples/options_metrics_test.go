@@ -5,8 +5,9 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/ygrebnov/metrics"
+
 	"github.com/ygrebnov/workers"
-	"github.com/ygrebnov/workers/metrics"
 )
 
 // ExampleWithMetrics shows how to configure Workers with a metrics provider.

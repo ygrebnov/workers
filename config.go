@@ -2,8 +2,7 @@ package workers
 
 import (
 	"github.com/ygrebnov/errorc"
-
-	"github.com/ygrebnov/workers/metrics"
+	"github.com/ygrebnov/metrics"
 )
 
 // config holds Workers configuration.
